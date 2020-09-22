@@ -9,6 +9,39 @@ from mesa import Agent, Model
 from mesa.datacollection import DataCollector
 from mesa.time import RandomActivation
 
+class MobileAgent(Agent):
+
+    _loc = None
+    _speed = None
+    _bearing = None
+
+    _loc_history = None
+
+    def __init__(self, unique_id, model, l, s, b):
+        super().__init__(unique_id, model)
+        self._loc = l
+        self._speed = s
+        self._bearing = b
+
+        self._loc_history = np.array([])
+
+    def move(self):
+        self._loc += (self._speed * np.sin(self._bearing), self._speed * np.cos(self._bearing))
+        return
+
+    def getSpeed(self):
+        return self._speed
+
+    def getBearing(self):
+        return self._bearing
+
+    def setBearing(self, b):
+        self._bearing = b
+
+    def getLoc(self):
+        return self._loc
+
+
 
 class Road(Agent):
 
