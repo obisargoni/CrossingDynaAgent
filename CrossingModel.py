@@ -9,6 +9,12 @@ from mesa import Agent, Model
 from mesa.datacollection import DataCollector
 from mesa.time import RandomActivation
 
+from importlib import reload
+import tilings
+tilings = reload(tilings)
+from tilings import TilingGroup
+
+
 class MobileAgent(Agent):
 
     _loc = None
