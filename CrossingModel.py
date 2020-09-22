@@ -90,28 +90,21 @@ class CrossingAlternative(Agent):
     def getCrossingType(self):
         return self._ctype
 
+class Ped(MobileAgent):
 
-class Ped(Agent):
-
-    _model_type = None
-
-    _loc = None
-    _speed = None # ms-1
-    _bearing = None
     _dest = None
 
-    def __init__(self, unique_id, model, location, speed, destination):
-        super().__init__(unique_id, model)
-
-        self._model_type = model_type
-
-        self._loc = location
-        self._speed = speed
-        self._bearing = bearing
+    def __init__(self, unique_id, model, l, s, b, d):
+        super().__init__(unique_id, model, l, s, b)
         self._dest = destination
+        self._road_length = model.getRoad().getLength()
 
-        self._loc_history = np.array([0])
+        # Initilise tiling group agent uses to discetise space
+        ngroups = 2
+        tiling_limits = [0,self._road_length]
+        ntiles = [25]
 
+        self._tg = TilingGroup(ngroups, tiling_limits, ntiles)
 
     def caLoc(self, ca):
         ca_loc = ca.getLoc()
@@ -169,13 +162,6 @@ class Ped(Agent):
         else:
             return scipy.special.softmax(self._lambda * self.ca_salience_distances_to_dest())
 
-
-    def walk(self):
-
-        self._loc += (self._speed * np.sin(self._bearing), self._speed * np.cos(self._bearing))
-
-        return
-
     def step(self):
 
         # Check if ped has reached end of the road or if it has chosen a crossing
@@ -183,23 +169,15 @@ class Ped(Agent):
 
             self._loc_history = np.append(self._loc_history, self._loc)
             # move the ped along
-            self.walk()
+            self.move()
         else:
             # When agent is done remove from schedule
             self.model.schedule.remove(self)
 
-
-    def getLoc(self):
-        return self._loc
-
     def getDestination(self):
         return self._dest
 
-    def getSpeed(self):
-        return self._speed
 
-    def getBearing(self):
-        return self._bearing
 
     def setBearing(self, b):
         self._bearing = b
