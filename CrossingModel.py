@@ -178,9 +178,23 @@ class Ped(MobileAgent):
         return self._dest
 
 
+class Vehicle(MobileAgent):
 
-    def setBearing(self, b):
-        self._bearing = b
+    def __init__(self, unique_id, model, l, s, b):
+        super().__init__(unique_id, model, l, s, b)
+
+    def step(self):
+
+        # Check if ped has reached end of the road or if it has chosen a crossing
+        if (self.getLoc() < self._road_length):
+
+            self._loc_history = np.append(self._loc_history, self._loc)
+            # move the agent along
+            self.move()
+        else:
+            # When agent is done remove from schedule
+            self.model.schedule.remove(self)
+
 
 
 class CrossingModel(Model):
