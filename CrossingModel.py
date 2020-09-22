@@ -68,6 +68,21 @@ class Road(Agent):
         self._vehicles = vs
         self._buildings = blds
 
+    def getVehicles(self):
+        return self._vehicles
+
+    def getLength(self):
+        return self._length
+
+    def getBuildings(self):
+        return self._buildings
+
+    def getCrossings(self):
+        return self._crossings
+
+    def getNLanes(self):
+        return self._nlanes
+
 class CrossingAlternative(Agent):
 
     _loc = None
