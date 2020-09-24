@@ -95,7 +95,7 @@ class TilingGroup(object):
         self.N = sum([t.N for t in self.tilings])
         
     def feature(self, s):
-        if not isinstance(s, list):
+        if not isinstance(s, (list, tuple)):
             s = [s]
         features = np.array([t.feature(s) for t in self.tilings])
         return features.flatten()
