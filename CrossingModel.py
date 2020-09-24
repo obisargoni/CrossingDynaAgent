@@ -1,9 +1,8 @@
 # Testing out accumulator model of crossing option choice
 
 import numpy as np
-import scipy.special
-from scipy.stats import bernoulli
 import sys
+import networkx as nx
 
 from mesa import Agent, Model
 from mesa.datacollection import DataCollector
