@@ -104,9 +104,148 @@ class CrossingAlternative(Agent):
     def getCrossingType(self):
         return self._ctype
 
-class Ped(MobileAgent):
+class PedInternalModel(Object):
 
-    _dest = None
+    _mdp = None
+    _s = None
+    _terminal = False
+
+    _crossing_features = None
+    _dest_feature = None
+    _vehicles = None
+
+    def __init__(self, tg, s = None, cfs = None, df = None, vs = None):
+        '''
+        tg {TilingGroup} The tiling used to discretise the environment
+        s {array} The feature vector corresponding to the agent's current state
+        cfs {list} A list of arrays corresponding to all locations that correspond to crossing infrastructure
+        df {array} The feature vector of the agent's destination
+        vs {int} The number of vehicles on the road.
+        '''
+        
+        # The tiling group used by the agent to discretise space
+        self._tg = tg
+
+        self._crossing_features = cfs
+        self._dest_feature = df
+        self._vehicles = vs
+
+        # Get a lookup from node id to state
+        tg_edgesx = np.array([t.edges[0] for t in self._tg.tilings]).flatten()
+        tg_edgesx = tg_edges.concatenate(tg_edgesx, self._tg.limits[0])
+        tg_edgesx.sort()
+
+        tg_edgesy = self._tg.limits[1]
+
+
+        self.dict_id_feature = {}
+        self.dict_feature_id = {}
+        self._mdp = nx.DiGraph()
+
+        # Connect features on one side of the road to each other
+        iy = 0
+        for ix, ex in enumerate(tg_edgesx):
+
+            ey = tg_edgesy[iy]
+
+            node_id = str(iy)+str(ix)
+
+            # Add lookup to dict
+            f = self._tg.feature((ex, ey))
+            self.dict_id_feature[node_id] = f
+            self.dict_feature_id[f] = node_id
+
+            # Add directed edge to graph if not at last edge
+            if ix != len(tg_edgesx)-1:
+                node_j = str(iy) + str(ix+1)
+                self._mdp.add_edge(node_i, node_j, action = 'fwd')
+            else:
+                # Connect last edge to itself since can't go forward from here
+                self._mdp.add_edge(node_i,node_i, action = 'fwd')
+
+        # Connect features on the other side of the road to each other
+        iy = 1
+        for ix, ex in enumerate(tg_edgesx):
+
+            ey = tg_edgesy[iy]
+
+            node_id = str(iy)+str(ix)
+
+            # Add lookup to dict
+            f = self._tg.feature((ex, ey))
+            self.dict_id_feature[node_id] = f
+            self.dict_feature_id[f] = node_id
+
+            # Add directed edge to graph if not at last edge
+            if (ix != len(tg_edgesx)-1) & (f != self._dest_feature):
+                node_j = str(iy) + str(ix+1)
+                self._mdp.add_edge(node_i, node_j, action = 'fwd')
+            elif (ix != len(tg_edgesx)-1) & (f == self._dest_feature):
+                # Reverse the direction of the edge so that walking forward drects to destination
+                node_j = str(iy) + str(ix+1)
+                self._mdp.add_edge(node_j, node_i, action = 'fwd')
+            else:
+                # Connect last edge to itself since can't go forward from here
+                self._mdp.add_edge(node_i,node_i, action = 'fwd')
+
+        # Connect features across the road with cross actions
+        for ix, ex in enumerate(tg_edgesx):
+
+            node_i = str(0)+str(ix)
+            node_j = str(1)+str(ix)
+
+            self._mdp.add_edge(node_i, node_j, action = 'cross')
+
+
+        # Set current state
+        self._s = s
+
+    @property
+    def state(self):
+        return self._s
+
+    def step(self, a):
+        '''Progress to new state following action a
+        '''
+        # Initialise the reward
+        r = None
+        
+        state_node = self.dict_feature_id[self._s]
+
+        # Find node that results from taking this action
+        for e in this._mdp.edges(nbunch=state_node, data='action'):
+            if e[2] == a:
+                s = self.dict_id_feature[e[1]]
+                self._s = s
+                r = self.reward(s,a)
+                break
+
+        return (self._s, r)
+
+    def reward(self, s, a):
+        '''Get the reward of arriving in state s
+        '''
+
+        if a == 'fwd':
+            # -1 reward for each step taken forward regardless of state
+            return -1
+        elif a == 'cross':
+            # Find out if ped is crossing by some crossing infrastructure
+            cross_on_inf = s in self._crossing_features
+
+            if cross_on_inf:
+                return 0
+            else:
+                # Return value to reflect exposure of vehicles
+                return -1*self.vehicles
+
+    
+    def setState(self, s):
+        self._s = s
+        self._terminal = False
+
+
+class Ped(MobileAgent):
 
     def __init__(self, unique_id, model, l, s, b, d):
         super().__init__(unique_id, model, l, s, b)
