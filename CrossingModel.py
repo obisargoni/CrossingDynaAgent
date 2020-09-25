@@ -73,6 +73,9 @@ class Road(Agent):
     def getLength(self):
         return self._length
 
+    def getWidth(self):
+        return self._width
+
     def getBuildings(self):
         return self._buildings
 
@@ -104,7 +107,7 @@ class CrossingAlternative(Agent):
     def getCrossingType(self):
         return self._ctype
 
-class PedInternalModel(Object):
+class PedInternalModel():
 
     _mdp = None
     _s = None
@@ -114,7 +117,7 @@ class PedInternalModel(Object):
     _dest_feature = None
     _vehicles = None
 
-    def __init__(self, tg, s = None, cfs = None, df = None, vs = None):
+    def __init__(self, tg, cfs = None, df = None, vs = None):
         '''
         tg {TilingGroup} The tiling used to discretise the environment
         s {array} The feature vector corresponding to the agent's current state
@@ -130,75 +133,57 @@ class PedInternalModel(Object):
         self._dest_feature = df
         self._vehicles = vs
 
+        self.build_mdp()
+
+    def build_mdp(self):
+        '''Given the tilings used to represent the space and the destination create an mdp representing the result of 'walk forward' and 'cross'
+        actions in each tile. Tiles on the same side of the road as the destination only have walk forward actions available.
+        '''
         # Get a lookup from node id to state
         tg_edgesx = np.array([t.edges[0] for t in self._tg.tilings]).flatten()
-        tg_edgesx = tg_edges.concatenate(tg_edgesx, self._tg.limits[0])
+        tg_edgesx = np.concatenate((tg_edgesx, self._tg.limits[0]))
         tg_edgesx.sort()
 
         tg_edgesy = self._tg.limits[1]
 
 
         self.dict_id_feature = {}
-        self.dict_feature_id = {}
         self._mdp = nx.DiGraph()
 
         # Connect features on one side of the road to each other
-        iy = 0
-        for ix, ex in enumerate(tg_edgesx):
+        edge_direction = '+'
+        for iy, ey in enumerate(tg_edgesy):
+            for ix, ex in enumerate(tg_edgesx):
 
-            ey = tg_edgesy[iy]
-
-            node_id = str(iy)+str(ix)
-
-            # Add lookup to dict
-            f = self._tg.feature((ex, ey))
-            self.dict_id_feature[node_id] = f
-            self.dict_feature_id[f] = node_id
-
-            # Add directed edge to graph if not at last edge
-            if ix != len(tg_edgesx)-1:
+                node_i = str(iy)+str(ix)
                 node_j = str(iy) + str(ix+1)
-                self._mdp.add_edge(node_i, node_j, action = 'fwd')
-            else:
-                # Connect last edge to itself since can't go forward from here
-                self._mdp.add_edge(node_i,node_i, action = 'fwd')
 
-        # Connect features on the other side of the road to each other
-        iy = 1
-        for ix, ex in enumerate(tg_edgesx):
+                # Add lookup to dict
+                f = self._tg.feature((ex, ey))
 
-            ey = tg_edgesy[iy]
+                self.dict_id_feature[node_i] = f
 
-            node_id = str(iy)+str(ix)
+                # Add directed edge to graph if not at last edge
+                if ix != len(tg_edgesx)-1:
+                    # Depending on whist side of the road, connect in all same direction or all towards the destination feature
+                    if edge_direction == '+':
+                        self._mdp.add_edge(node_i, node_j, action = 'fwd')
+                    else:
+                        self._mdp.add_edge(node_j, node_i, action = 'fwd')                    
+                else:
+                    # Connect last edge to itself since can't go forward from here
+                    self._mdp.add_edge(node_i,node_i, action = 'fwd')
 
-            # Add lookup to dict
-            f = self._tg.feature((ex, ey))
-            self.dict_id_feature[node_id] = f
-            self.dict_feature_id[f] = node_id
-
-            # Add directed edge to graph if not at last edge
-            if (ix != len(tg_edgesx)-1) & (f != self._dest_feature):
-                node_j = str(iy) + str(ix+1)
-                self._mdp.add_edge(node_i, node_j, action = 'fwd')
-            elif (ix != len(tg_edgesx)-1) & (f == self._dest_feature):
-                # Reverse the direction of the edge so that walking forward drects to destination
-                node_j = str(iy) + str(ix+1)
-                self._mdp.add_edge(node_j, node_i, action = 'fwd')
-            else:
-                # Connect last edge to itself since can't go forward from here
-                self._mdp.add_edge(node_i,node_i, action = 'fwd')
+                # Switch the edge direction if the starting node if the destination
+                if np.equal(f,self._dest_feature).all():
+                    edge_direction = '-'
 
         # Connect features across the road with cross actions
         for ix, ex in enumerate(tg_edgesx):
-
             node_i = str(0)+str(ix)
             node_j = str(1)+str(ix)
-
             self._mdp.add_edge(node_i, node_j, action = 'cross')
 
-
-        # Set current state
-        self._s = s
 
     @property
     def state(self):
@@ -208,17 +193,27 @@ class PedInternalModel(Object):
         '''Progress to new state following action a
         '''
         # Initialise the reward
-        r = None
+        r = 0
         
-        state_node = self.dict_feature_id[self._s]
+        state_node = None
+        # Loop through key value pais to find node corresponding to state
+        for k,v in self.dict_id_feature.items():
+            if np.equal(v,self._s).all():
+                state_node = k
+                break
 
         # Find node that results from taking this action
         for e in this._mdp.edges(nbunch=state_node, data='action'):
             if e[2] == a:
-                s = self.dict_id_feature[e[1]]
-                self._s = s
-                r = self.reward(s,a)
+                r = self.reward(self._s, a)
+                new_s = self.dict_id_feature[e[1]] 
+                self._s = new_s
                 break
+
+
+        # If reached destination set terminal to true
+        if np.equal(self._s, self._dest_feature).all():
+            self._terminal = True
 
         return (self._s, r)
 
@@ -243,6 +238,9 @@ class PedInternalModel(Object):
     def setState(self, s):
         self._s = s
         self._terminal = False
+
+    def isTerminal(self):
+        return self._terminal
 
 
 class Ped(MobileAgent):
