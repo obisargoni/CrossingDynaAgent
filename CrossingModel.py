@@ -3,6 +3,7 @@
 import numpy as np
 import sys
 import networkx as nx
+import itertools
 
 from mesa import Agent, Model
 from mesa.datacollection import DataCollector
@@ -394,31 +395,28 @@ class Vehicle(MobileAgent):
 
 
 class CrossingModel(Model):
-    def __init__(self, ped_origin, ped_destination, road_length, road_width, vehicle_flow, epsilon, gamma, ped_speed, lam, alpha, a_rate):
+    def __init__(self, road_length, road_width, vehicle_flow, n_lanes, ped_origin, ped_destination, gamma, ped_speed):
         self.schedule = RandomActivation(self)
         self.running = True
         self.nsteps = 0
 
-        # Create two crossing alternatives, one a zebra crossing and one mid block crossing
-        zebra_location = road_length * 0.75
-        zebra_type = 'zebra'
-        mid_block_type = 'unmarked'
-        
-        zebra = CrossingAlternative(0, self, location = zebra_location, ctype = zebra_type, name = 'z1', vehicle_flow = vehicle_flow)
-        unmarked = CrossingAlternative(1, self, ctype = mid_block_type, name = 'mid1', vehicle_flow = vehicle_flow)
+        # Create the road
+        uid = 0
 
-        # Crossing alternatives with salience factors
-        crossing_altertives = np.array([unmarked,zebra])
+        crossing_start = int(road_length*0.75 - 2)
+        crossing_end = int(road_length*0.75 + 2)
+        crossing_coords = [(x,y) for x,y in itertools.product(range(crossing_start, crossing_end), [0,road_width])]
 
-        i = 0
-        model_type = 'sampling'
-        self.ped = Ped(i, self, location = ped_origin, speed = ped_speed, destination = ped_destination, crossing_altertives = crossing_altertives, road_length = road_length, road_width = road_width, epsilon = epsilon, gamma = gamma, lam = lam, alpha = alpha, a_rate = a_rate, model_type = model_type)
+        self.road = Road(uid, self, road_length, road_width, n_lanes, xcoords = crossing_coords, vf = vehicle_flow, blds = None)
+
+        # Create the ped
+        uid += 1
+        bearing = 0
+
+        self.ped = Ped(uid, self, l = ped_origin, b = bearing, s = ped_speed, d = ped_destination, g = gamma)
         self.schedule.add(self.ped)
 
         self.datacollector = DataCollector(agent_reporters={"CrossingType": "chosenCAType"})
-
-        self.crossing_choice = None
-        self.choice_step = None
 
     def step(self):
         self.datacollector.collect(self)
@@ -426,4 +424,10 @@ class CrossingModel(Model):
         if self.schedule.get_agent_count() == 0:
             self.running = False
         self.nsteps += 1
+
+    def getRoad(self):
+        return self.road
+
+    def getPed(self):
+        return self.ped
 
