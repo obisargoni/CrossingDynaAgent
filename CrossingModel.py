@@ -58,16 +58,16 @@ class Road(Agent):
     _vehicles = None
     _buildings = None
 
-    def __init__(self, unique_id, model, l, w, nl, xs = None, vs = None, blds = None):
+    def __init__(self, unique_id, model, l, w, nl, xcoords = None, vf = None, blds = None):
         super().__init__(unique_id, model)
         self._length = l
         self._width = w
         self._nlanes = nl
-        self._crossings = xs
-        self._vehicles = vs
+        self._crossing_coordinates = xcoords
+        self._vehicles = vf
         self._buildings = blds
 
-    def getVehicles(self):
+    def getVehicleFlow(self):
         return self._vehicles
 
     def getLength(self):
@@ -79,8 +79,8 @@ class Road(Agent):
     def getBuildings(self):
         return self._buildings
 
-    def getCrossings(self):
-        return self._crossings
+    def getCrossingCoords(self):
+        return self._crossing_coordinates
 
     def getNLanes(self):
         return self._nlanes
