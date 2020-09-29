@@ -214,7 +214,7 @@ class PedInternalModel():
         return state_node
 
         # Find node that results from taking this action
-        for e in this._mdp.edges(nbunch=state_node, data='action'):
+        for e in self._mdp.edges(nbunch=state_node, data='action'):
             if e[2] == a:
                 r = self.reward(self._s, a)
                 new_s = self.dict_id_feature[e[1]] 
