@@ -213,6 +213,14 @@ class PedInternalModel():
                 break
         return state_node
 
+    def step(self, a):
+        '''Progress to new state following action a
+        '''
+        # Initialise the reward
+        r = 0
+
+        state_node = self.state_node(self._s)
+
         # Find node that results from taking this action
         for e in self._mdp.edges(nbunch=state_node, data='action'):
             if e[2] == a:
