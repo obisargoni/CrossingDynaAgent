@@ -265,73 +265,98 @@ class PedInternalModel():
 
 class Ped(MobileAgent):
 
-    def __init__(self, unique_id, model, l, s, b, d):
+    def __init__(self, unique_id, model, l, b, s, d, g):
+        '''
+        unique_id {int} Unique ID used to index agent
+        model {mesa.Model} The model environment agent is placed in
+        l {tuple} The starting location of the agent
+        b {tuple} The starting bearing of the agent
+        s {double} The speed of the agent
+        d {tuple} The destination of the agent
+        g {double} The discount factor applied to future rewards by the agent
+        '''
         super().__init__(unique_id, model, l, s, b)
-        self._dest = destination
+        self._dest = d
         self._road_length = model.getRoad().getLength()
+        self._road_width = model.getRoad().getWidth()
+        self._crossing_coordinates = model.getRoad().getCrossingCoords()
+
+        # Note location opposite destination on agent's side of the road
+        self._opp_dest = (self._dest[0], self._loc[1])
 
         # Initilise tiling group agent uses to discetise space
         ngroups = 2
-        tiling_limits = [0,self._road_length]
-        ntiles = [25]
+        tiling_limits = [(0,self._road_length), (0, self._road_width)]
+        ntiles = [25, 2]
 
         self._tg = TilingGroup(ngroups, tiling_limits, ntiles)
 
-    def caLoc(self, ca):
-        ca_loc = ca.getLoc()
+        self._dest_feature = self._tg.feature(self._dest)
+        self._crossings_features = [self._tg.feature(c) for c in self._crossing_coordinates]
+        self._opp_dest_feature = self._tg.feature(self._opp_dest)
 
-        # Mid block crossings not assigned a locations because they take place at ped's current location
-        if ca_loc is None:
-            ca_loc = self._loc
-
-        return ca_loc
+        # Initialise an internal model of the street environment for the ped to use for planning
+        self.internal_model = PedInternalModel(self._tg, cfs = self._crossings_features, destf = self._dest_feature, vs = model.getRoad().getVehicleFlow())
 
 
-    def ca_walk_time(self, ca):
-        ca_loc = self.caLoc(ca)
+    def set_search_policy(self, opp_destf):
+        '''The agent explores its internal model using a search policy. The policy consists of the probability of taking actions
+        move forward or cross road at each state. The policy probability is set such that the agent explores crossing close to its
+        destination more frequently.
 
-        # separate costsing into waiting and walking on road time (no traffic exposure) time
-        ww_time = abs(self._loc - ca_loc)/self._speed + abs(ca_loc - self._dest)/self._speed
+        Model search policy as negative binomial since two actions available at each state. For mean crossing location to be opposit destination
+        need r=1 success after k failures, with k the number of times the agent has to continue straight between states.
 
-        return ww_time
-
-    def ca_detour_time(self, ca):
-        '''The time difference between using the crossing alternative and walking directly to the destination
-        via an unmarked crossing
+        Args:
+            opp_destf {array} Feature corresponding to the location opposite the agent's destination, where crossing takes the agent directly to its destination
         '''
-        ca_loc = self.caLoc(ca)
 
-        d_ca = abs(self._loc - ca_loc) + abs(ca_loc - self._dest)
+        k=0
+        while np.equal(self.internal_model._s, opp_destf).all() == False:
+            self.internal_model.step('fwd')
+            k+=1
 
-        detour_dist = d_ca - abs(self._dest - self._loc)
+        p_cross = 1 / (k + 1)
+        p_fwd = 1-p_cross
 
-        return detour_dist/self._speed
+        self.search_policy = [('fwd', 'cross'), (p_fwd, p_cross)]
 
+    def choose_search_action(self):
+        a = np.random.choice(*self.search_policy)
+        return a
 
-    def ca_salience_distances_to_dest(self):
-        '''Salience of crossing option determined by difference between twice the road length and the distance to the destination
+    def internal_model_planning(self):
+        '''Help inform what action to take now by exploring the internal model of the road environment, using it to plan
+        best action at current state.
         '''
-        ca_salience_distances = []
-        for i,ca in enumerate(self._crossing_alternatives):
 
-            # Get distance from agent to destination
-            d = abs(self._dest - self._loc)
+        # Set the current state of the internal model as the ped's current location
+        loc_feature = self._tg.feature(self._loc)
+        self.internal_model.setState(loc_feature)
 
-            # Get distnaces to and from the ca
-            d_to = self.caLoc(ca) - self._loc
-            d_from = self._dest - self.caLoc(ca)
+        # Set search policy
+        self.set_search_policy(loc_feature, self._dest_feature)
 
-            # Salience distance is difference between direct distance and distance via crossing, scaled by road length
-            d_s = (2*self._road_length - (abs(d_to) + abs(d_from) - d)) / self._road_length
-            ca_salience_distances.append(d_s)
-        return np.array(ca_salience_distances)
+        # Run episode, get states and actions visited and total discounted return
+        states_actions_visited = []
+        rtn = 0
+        t = 0
+        while self.internal_model._terminal == False:
+            state = self.internal_model._s
+            action = self.choose_search_action()
+            states_actions_visited.append((state, action))
+            new_state, reward = self.internal_model.step(a)
+            rtn += reward*(g**t) # Discount reward and add to total return
+            t+=1
 
+        # Use this to update weights using the return
+        for s,a in states_actions_visited:
+            td_error = rtn - self.internal_model.q(s,a)
+            self.internal_model.w[:, a] += self.alpha * td_error * s
+            self.internal_model.N[s,a] += 1
 
-    def ca_salience_factors_softmax(self, salience_type = 'ca'):
-        if salience_type == 'ca':
-            return scipy.special.softmax(self._lambda * self.ca_salience_distances_to_ca())
-        else:
-            return scipy.special.softmax(self._lambda * self.ca_salience_distances_to_dest())
+        # Reason about value uncertainty and use this to set when to stop planning and take action
+        # For this probs needs to record number of times states visited to estimate variance
 
     def step(self):
 
