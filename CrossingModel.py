@@ -289,7 +289,7 @@ class PedInternalModel():
 
 class Ped(MobileAgent):
 
-    def __init__(self, unique_id, model, l, b, s, d, g):
+    def __init__(self, unique_id, model, l, b, s, d, g, a):
         '''
         unique_id {int} Unique ID used to index agent
         model {mesa.Model} The model environment agent is placed in
@@ -298,6 +298,7 @@ class Ped(MobileAgent):
         s {double} The speed of the agent
         d {tuple} The destination of the agent
         g {double} The discount factor applied to future rewards by the agent
+        a {double} Step size of update to feature vector weights
         '''
         super().__init__(unique_id, model, l, s, b)
         self._dest = d
@@ -305,6 +306,7 @@ class Ped(MobileAgent):
         self._road_width = model.getRoad().getWidth()
         self._crossing_coordinates = model.getRoad().getCrossingCoords()
         self._g = g
+        self._a = a
 
         # Note location opposite destination on agent's side of the road
         self._opp_dest = (self._dest[0], self._loc[1])
@@ -390,7 +392,7 @@ class Ped(MobileAgent):
         # Use this to update weights using the return
         for s,a in sa_visited:
             td_error = rtn - self.internal_model.q(s, a = a)
-            self.internal_model.w[:, a] += self.alpha * td_error * s
+            self.internal_model.w[:, a] += self._a * td_error * s
             self.internal_model.N[s,a] += 1
 
         # Reason about value uncertainty and use this to set when to stop planning and take action
@@ -432,7 +434,7 @@ class Vehicle(MobileAgent):
 
 
 class CrossingModel(Model):
-    def __init__(self, road_length, road_width, vehicle_flow, n_lanes, ped_origin, ped_destination, gamma, ped_speed):
+    def __init__(self, road_length, road_width, vehicle_flow, n_lanes, ped_origin, ped_destination, gamma, alpha, ped_speed):
         self.schedule = RandomActivation(self)
         self.running = True
         self.nsteps = 0
@@ -450,7 +452,7 @@ class CrossingModel(Model):
         uid += 1
         bearing = 0
 
-        self.ped = Ped(uid, self, l = ped_origin, b = bearing, s = ped_speed, d = ped_destination, g = gamma)
+        self.ped = Ped(uid, self, l = ped_origin, b = bearing, s = ped_speed, d = ped_destination, g = gamma, a = alpha)
         self.schedule.add(self.ped)
 
         self.datacollector = DataCollector(agent_reporters={"CrossingType": "chosenCAType"})

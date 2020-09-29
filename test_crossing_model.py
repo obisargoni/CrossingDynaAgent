@@ -54,8 +54,9 @@ d = (road_length*0.5, road_width)
 s = 1.5
 b = 0
 g = 0.7
+a = 0.05
 
-cm = CrossingModel(road_length, road_width, vehicle_flow, n_lanes, o, d, g, s)
+cm = CrossingModel(road_length, road_width, vehicle_flow, n_lanes, o, d, g, a, s)
 
 # Get ped and road
 
