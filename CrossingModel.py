@@ -240,18 +240,19 @@ class PedInternalModel():
         '''Get the reward of arriving in state s
         '''
 
-        if a == 'fwd':
+        if a == 0:
             # -1 reward for each step taken forward regardless of state
             return -1
-        elif a == 'cross':
+        elif a == 1:
             # Find out if ped is crossing by some crossing infrastructure
-            cross_on_inf = s in self._crossing_features
+            cross_on_inf = np.array([np.equal(s, cf).all() for cf in self._crossing_features]).any()
 
             if cross_on_inf:
                 return 0
             else:
                 # Return value to reflect exposure of vehicles
-                return -1*self.vehicles
+                return -1*self._vehicles
+
     def q(self, s, a = None):
         '''Get value of state-action
         '''
@@ -261,7 +262,6 @@ class PedInternalModel():
         else:
             return q[a]
 
-    
     def setState(self, s):
         self._s = s
         self._terminal = False
@@ -304,6 +304,7 @@ class Ped(MobileAgent):
         self._road_length = model.getRoad().getLength()
         self._road_width = model.getRoad().getWidth()
         self._crossing_coordinates = model.getRoad().getCrossingCoords()
+        self._g = g
 
         # Note location opposite destination on agent's side of the road
         self._opp_dest = (self._dest[0], self._loc[1])
@@ -323,7 +324,7 @@ class Ped(MobileAgent):
         self.internal_model = PedInternalModel(self._tg, cfs = self._crossings_features, destf = self._dest_feature, vs = model.getRoad().getVehicleFlow())
 
 
-    def set_search_policy(self, opp_destf):
+    def set_search_policy(self, ped_locf, opp_destf):
         '''The agent explores its internal model using a search policy. The policy consists of the probability of taking actions
         move forward or cross road at each state. The policy probability is set such that the agent explores crossing close to its
         destination more frequently.
@@ -332,50 +333,63 @@ class Ped(MobileAgent):
         need r=1 success after k failures, with k the number of times the agent has to continue straight between states.
 
         Args:
+            ped_locf {array} Feature corresponding to the pedestrian agent's current location
             opp_destf {array} Feature corresponding to the location opposite the agent's destination, where crossing takes the agent directly to its destination
         '''
 
+        self.internal_model.setState(ped_locf)
+
         k=0
         while np.equal(self.internal_model._s, opp_destf).all() == False:
-            self.internal_model.step('fwd')
+            self.internal_model.step(0)
             k+=1
 
         p_cross = 1 / (k + 1)
         p_fwd = 1-p_cross
 
-        self.search_policy = [('fwd', 'cross'), (p_fwd, p_cross)]
+        # Reset the internal model state to the state the ped is currently in
+        self.internal_model.setState(ped_locf)
 
-    def choose_search_action(self):
-        a = np.random.choice(*self.search_policy)
+        self.search_policy = [(0, 1), (p_fwd, p_cross)]
+
+    def choose_action(self, policy):
+        possible_actions = policy[0]
+        action_probabilities = policy[1]
+        a = np.random.choice(possible_actions, p = action_probabilities)
         return a
 
-    def internal_model_planning(self):
+    def run_episode_return_states_actions_total_return(self, policy):
+        # Run episode, get states and actions visited and total discounted return
+        # This currently works out as every visit monte carlo update
+        sa_visited = []
+        rtn = 0
+        t = 0
+        while self.internal_model._terminal == False:
+            s = self.internal_model._s
+            a = self.choose_action(policy)
+            sa_visited.append((s, a))
+            new_s, reward = self.internal_model.step(a)
+            rtn += reward*(self._g**t) # Discount reward and add to total return
+            t+=1
+
+        return (sa_visited, rtn)
+
+    def mc_update_of_internal_model(self):
         '''Help inform what action to take now by exploring the internal model of the road environment, using it to plan
         best action at current state.
         '''
 
         # Set the current state of the internal model as the ped's current location
         loc_feature = self._tg.feature(self._loc)
-        self.internal_model.setState(loc_feature)
 
-        # Set search policy
-        self.set_search_policy(loc_feature, self._dest_feature)
+        # Set search policy. This method sets the current state of ped's internal model to be state corresponding to ped's current location
+        self.set_search_policy(loc_feature,self._opp_dest_feature)
 
-        # Run episode, get states and actions visited and total discounted return
-        states_actions_visited = []
-        rtn = 0
-        t = 0
-        while self.internal_model._terminal == False:
-            state = self.internal_model._s
-            action = self.choose_search_action()
-            states_actions_visited.append((state, action))
-            new_state, reward = self.internal_model.step(a)
-            rtn += reward*(g**t) # Discount reward and add to total return
-            t+=1
+        sa_visited, rtn = self.run_episode_return_states_actions_total_return(self.search_policy)
 
         # Use this to update weights using the return
-        for s,a in states_actions_visited:
-            td_error = rtn - self.internal_model.q(s,a)
+        for s,a in sa_visited:
+            td_error = rtn - self.internal_model.q(s, a = a)
             self.internal_model.w[:, a] += self.alpha * td_error * s
             self.internal_model.N[s,a] += 1
 
