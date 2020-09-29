@@ -252,6 +252,14 @@ class PedInternalModel():
             else:
                 # Return value to reflect exposure of vehicles
                 return -1*self.vehicles
+    def q(self, s, a = None):
+        '''Get value of state-action
+        '''
+        q = np.matmul(s, self._w)
+        if a is None:
+            return q
+        else:
+            return q[a]
 
     
     def setState(self, s):
