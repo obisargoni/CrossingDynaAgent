@@ -150,7 +150,7 @@ class PedInternalModel():
         '''
         # Get a lookup from node id to state
         tg_edgesx = np.array([t.edges[0] for t in self._tg.tilings]).flatten()
-        tg_edgesx = np.concatenate((tg_edgesx, self._tg.limits[0]))
+        tg_edgesx = np.concatenate((tg_edgesx, self._tg.limits[0][:1])) # Only add in the lower limit
         tg_edgesx.sort()
 
         tg_edgesy = self._tg.limits[1]
@@ -161,50 +161,57 @@ class PedInternalModel():
 
         # Connect features on one side of the road to each other
         edge_direction = '+'
-        for iy, ey in enumerate(tg_edgesy):
-            for ix, ex in enumerate(tg_edgesx):
+        for iy in range(len(tg_edgesy)):
+            for ix in range(len(tg_edgesx)-1):
+                ey = tg_edgesy[iy]
+
+                exi = tg_edgesx[ix]
+                exj = tg_edgesx[ix+1]
 
                 node_i = str(iy)+str(ix)
                 node_j = str(iy) + str(ix+1)
 
                 # Add lookup to dict
-                f = self._tg.feature((ex, ey))
+                fi = self._tg.feature((exi, ey))
+                fj = self._tg.feature((exj, ey))
 
-                self.dict_id_feature[node_i] = f
+                if (node_i not in self.dict_id_feature.keys()):
+                    self.dict_id_feature[node_i] = fi
+                if (node_j not in self.dict_id_feature.keys()):
+                    self.dict_id_feature[node_j] = fj
 
                 # Add directed edge to graph if not at last edge
-                if ix != len(tg_edgesx)-1:
+                if (ix == len(tg_edgesx)-2) & (iy == 0):
+                    self._mdp.add_edge(node_j, node_j, action = 0)
+
+                else:
                     # Depending on whist side of the road, connect in all same direction or all towards the destination feature
                     if edge_direction == '+':
-                        self._mdp.add_edge(node_i, node_j, action = 'fwd')
+                        self._mdp.add_edge(node_i, node_j, action = 0)
                     else:
-                        self._mdp.add_edge(node_j, node_i, action = 'fwd')                    
-                else:
-                    # Connect last edge to itself since can't go forward from here
-                    self._mdp.add_edge(node_i,node_i, action = 'fwd')
+                        self._mdp.add_edge(node_j, node_i, action = 0)
 
-                # Switch the edge direction if the starting node if the destination
-                if np.equal(f,self._dest_feature).all():
+
+                # Switch the edge direction if the starting node is the destination
+                if np.equal(fj,self._dest_feature).all():
                     edge_direction = '-'
 
         # Connect features across the road with cross actions
         for ix, ex in enumerate(tg_edgesx):
             node_i = str(0)+str(ix)
             node_j = str(1)+str(ix)
-            self._mdp.add_edge(node_i, node_j, action = 'cross')
 
-    def step(self, a):
-        '''Progress to new state following action a
-        '''
-        # Initialise the reward
-        r = 0
-        
+            # Action value of 1 corresponds to crossing
+            self._mdp.add_edge(node_i, node_j, action = 1)
+
+    def state_node(self, s):
         state_node = None
         # Loop through key value pais to find node corresponding to state
         for k,v in self.dict_id_feature.items():
-            if np.equal(v,self._s).all():
+            if np.equal(v,s).all():
                 state_node = k
                 break
+        return state_node
 
         # Find node that results from taking this action
         for e in this._mdp.edges(nbunch=state_node, data='action'):
