@@ -117,12 +117,12 @@ class PedInternalModel():
     _dest_feature = None
     _vehicles = None
 
-    def __init__(self, tg, cfs = None, df = None, vs = None):
+    def __init__(self, tg, cfs = None, destf = None, vs = None):
         '''
         tg {TilingGroup} The tiling used to discretise the environment
         s {array} The feature vector corresponding to the agent's current state
         cfs {list} A list of arrays corresponding to all locations that correspond to crossing infrastructure
-        df {array} The feature vector of the agent's destination
+        destf {array} The feature vector of the agent's destination
         vs {int} The number of vehicles on the road.
         '''
         
@@ -130,8 +130,16 @@ class PedInternalModel():
         self._tg = tg
 
         self._crossing_features = cfs
-        self._dest_feature = df
+        self._dest_feature = destf
         self._vehicles = vs
+
+        self._sss = (self._tg.N, 2)
+
+        # Initialise weights with arbitary low value so that agent doesn't take action it has not considered with internal model
+        self._w = np.full(self._sss, -100)
+
+        # Record number of times states visited
+        self._N = np.zeros(self._sss)
 
         self.build_mdp()
 
@@ -183,11 +191,6 @@ class PedInternalModel():
             node_i = str(0)+str(ix)
             node_j = str(1)+str(ix)
             self._mdp.add_edge(node_i, node_j, action = 'cross')
-
-
-    @property
-    def state(self):
-        return self._s
 
     def step(self, a):
         '''Progress to new state following action a
@@ -241,6 +244,23 @@ class PedInternalModel():
 
     def isTerminal(self):
         return self._terminal
+
+    @property
+    def state(self):
+        return self._s
+
+    @property
+    def w(self):
+        return self._w
+
+    @property
+    def sss(self):
+        return self._sss
+    
+    @property
+    def N(self):
+        return self._N
+
 
 
 class Ped(MobileAgent):
