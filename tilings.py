@@ -67,7 +67,31 @@ class Tiling(object):
         tile = self.tile(s)
         features = np.zeros(self.N)
         features[tile] = 1
-        return features
+        return features.astype('int32')
+
+    def tile_from_feature(self, f):
+        # Get index where feature has value of 1
+        tile = np.where(f==1)[0][0]
+        return tile
+
+    def dims_from_tile(self, tile):
+
+        # Loop through number of dims
+        # Dim value is given by quotient of tile // size of tile space along remaining axes
+        dims = []
+        r = tile
+        for i in range(self.ndim-1):
+            dims.append(r // np.product(self.ntiles[i+1:]))
+
+            r = r % np.product(self.ntiles[i+1:])
+        dims.append(r)
+        return dims
+
+    def dims_from_feature(self, f):
+        tile = self.tile_from_feature(f)
+        dims = self.dims_from_tile(tile)
+        return dims
+
 
 
 class TilingGroup(object):
@@ -92,10 +116,26 @@ class TilingGroup(object):
                                offsets=i*self.offset_per_tiling)
                         for i in range(self.ntilings)]
         
-        self.N = sum([t.N for t in self.tilings])
+        self._N = [t.N for t in self.tilings]
         
     def feature(self, s):
         if not isinstance(s, (list, tuple)):
             s = [s]
         features = np.array([t.feature(s) for t in self.tilings])
         return features.flatten()
+
+    @property
+    def N(self):
+        return sum(self._N)
+    
+
+    def decompose_feature(self, f):
+        '''
+        '''
+        init_shape = f.size
+        fs = []
+        for n in self._N:
+            fs.append(f[:n])
+            f= f[n:]
+        assert sum([f.size for f in fs]) == init_shape
+        return fs
