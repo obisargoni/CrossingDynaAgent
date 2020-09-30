@@ -137,7 +137,7 @@ class PedInternalModel():
         self._sss = (self._tg.N, 2)
 
         # Initialise weights with arbitary low value so that agent doesn't take action it has not considered with internal model
-        self._w = np.full(self._sss, -100)
+        self._w = np.full(self._sss, -100.0)
 
         # Record number of times states visited
         self._N = np.zeros(self._sss)
@@ -393,7 +393,7 @@ class Ped(MobileAgent):
         for s,a in sa_visited:
             td_error = rtn - self.internal_model.q(s, a = a)
             self.internal_model.w[:, a] += self._a * td_error * s
-            self.internal_model.N[s,a] += 1
+            self.internal_model.N[:,a] += s
 
         # Reason about value uncertainty and use this to set when to stop planning and take action
         # For this probs needs to record number of times states visited to estimate variance
