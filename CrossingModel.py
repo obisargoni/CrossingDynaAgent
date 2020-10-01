@@ -183,12 +183,11 @@ class PedInternalModel():
                 if (ix == len(tg_edgesx)-2) & (iy == 0):
                     self._mdp.add_edge(node_j, node_j, action = 0)
 
+                # Depending on whist side of the road, connect in all same direction or all towards the destination feature
+                if edge_direction == '+':
+                    self._mdp.add_edge(node_i, node_j, action = 0)
                 else:
-                    # Depending on whist side of the road, connect in all same direction or all towards the destination feature
-                    if edge_direction == '+':
-                        self._mdp.add_edge(node_i, node_j, action = 0)
-                    else:
-                        self._mdp.add_edge(node_j, node_i, action = 0)
+                    self._mdp.add_edge(node_j, node_i, action = 0)
 
 
                 # Switch the edge direction if the starting node is the destination
