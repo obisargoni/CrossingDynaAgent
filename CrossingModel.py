@@ -32,7 +32,7 @@ class MobileAgent(Agent):
         self._loc_history = np.array([])
 
     def move(self):
-        self._loc += (self._speed * np.sin(self._bearing), self._speed * np.cos(self._bearing))
+        self._loc = (self._loc[0] + self._speed * np.sin(self._bearing), self._loc[1] + self._speed * np.cos(self._bearing))
         return
 
     def get_speed(self):
