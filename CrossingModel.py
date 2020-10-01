@@ -158,7 +158,7 @@ class PedInternalModel():
         tg_edgesy = self._tg.limits[1]
 
 
-        self.dict_id_feature = {}
+        self.dict_node_state = {}
         self._mdp = nx.DiGraph()
 
         # Connect features on one side of the road to each other
@@ -177,9 +177,9 @@ class PedInternalModel():
                 fi = self._tg.feature((exi, ey))
                 fj = self._tg.feature((exj, ey))
 
-                # Duplicates adding features to dict but think this might be faster than checking
-                self.dict_id_feature[node_i] = fi
-                self.dict_id_feature[node_j] = fj
+                # Duplicates adding states to dict but think this might be faster than checking
+                self.dict_node_state[node_i] = fi
+                self.dict_node_state[node_j] = fj
 
                 # Add directed edge to graph if not at last edge
                 if (ix == len(tg_edgesx)-2) & (iy == 0):
@@ -207,7 +207,7 @@ class PedInternalModel():
     def state_node(self, s):
         state_node = None
         # Loop through key value pais to find node corresponding to state
-        for k,v in self.dict_id_feature.items():
+        for k,v in self.dict_node_state.items():
             if np.equal(v,s).all():
                 state_node = k
                 break
@@ -225,8 +225,8 @@ class PedInternalModel():
         for e in self._mdp.edges(nbunch=state_node, data='action'):
             if e[2] == a:
                 r = self.reward(self._s, a)
-                new_s = self.dict_id_feature[e[1]] 
                 self._s = new_s
+                self._s = self.dict_node_state[self._sn] 
                 break
 
 
