@@ -116,14 +116,25 @@ ped.internal_model.setState(loc_feature)
 end_road_feature = ped._tg.feature((100,0))
 end_state_node = ped.internal_model.state_node(end_road_feature)
 nsteps = int(end_state_node)
-actions = [0] * (nsteps + 2)
+actions = [0] * (nsteps)
 for a in actions:
 	ped.internal_model.step(a)
+
+# Should now be at end of road
+s = ped.internal_model.state
+
+# Take some more steps forward
+for i in range(3):
+	ped.internal_model.step(0)
+
+assert np.equal(s, ped.internal_model.state).all()
+
+# Now cross and see how many steps required to get to dest
 ped.internal_model.step(1)
 
 n = 0
 while ped.internal_model.isTerminal() == False:
 	ped.internal_model.step(0)
 	n+=1
-assert n == (nsteps - k) - 1
+assert n == (nsteps - k)
 
