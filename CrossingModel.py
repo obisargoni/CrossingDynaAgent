@@ -142,11 +142,7 @@ class PedInternalModel():
 
         self._sss = (self._tg.N, 2)
 
-        # Initialise weights with arbitary low value so that agent doesn't take action it has not considered with internal model
-        self._w = np.full(self._sss, -10.0)
-
-        # Record number of times states visited
-        self._N = np.zeros(self._sss)
+        self.reset_values()
 
         self.build_mdp()
 
@@ -272,6 +268,13 @@ class PedInternalModel():
 
     def isTerminal(self):
         return self._terminal
+
+    def reset_values(self):
+        # Initialise weights with arbitary low value so that agent doesn't take action it has not considered with internal model
+        self._w = np.full(self._sss, -10.0)
+
+        # Record number of times states visited
+        self._N = np.zeros(self._sss)
 
     @property
     def state(self):
