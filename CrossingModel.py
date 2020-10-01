@@ -201,7 +201,7 @@ class PedInternalModel():
             node_i = str(0)+str(ix)
             node_j = str(1)+str(ix)
 
-            # Action value of 1 corresponds to crossing
+            # Action value of 1 corresponds to crossing. Only allow crossing in one direction
             self._mdp.add_edge(node_i, node_j, action = 1)
 
     def state_node(self, s):
@@ -423,8 +423,6 @@ class Ped(MobileAgent):
             self.internal_model.w[:, a] += self._a * td_error * s
             self.internal_model.N[:,a] += s
 
-        # Reason about value uncertainty and use this to set when to stop planning and take action
-        # For this probs needs to record number of times states visited to estimate variance
 
     def step(self):
 
