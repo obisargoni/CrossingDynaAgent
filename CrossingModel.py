@@ -354,7 +354,7 @@ class Ped(MobileAgent):
 
         self.search_policy = [(0, 1), (p_fwd, p_cross)]
 
-    def choose_action(self, policy):
+    def choose_search_action(self, policy):
         possible_actions = policy[0]
         action_probabilities = policy[1]
         a = np.random.choice(possible_actions, p = action_probabilities)
@@ -368,7 +368,7 @@ class Ped(MobileAgent):
         t = 0
         while self.internal_model._terminal == False:
             s = self.internal_model._s
-            a = self.choose_action(policy)
+            a = self.choose_search_action(policy)
             sa_visited.append((s, a))
             new_s, reward = self.internal_model.step(a)
             rtn += reward*(self._g**t) # Discount reward and add to total return
