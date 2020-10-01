@@ -383,6 +383,7 @@ class Ped(MobileAgent):
         sa_visited = []
         rtn = 0
         t = 0
+        start_state = self.internal_model._s
         while self.internal_model._terminal == False:
             s = self.internal_model._s
 
@@ -392,9 +393,14 @@ class Ped(MobileAgent):
             # choose action using policy
             a = self.choose_search_action(possible_actions, policy)
             sa_visited.append((s, a))
+
+            # take action
             new_s, reward = self.internal_model.step(a)
             rtn += reward*(self._g**t) # Discount reward and add to total return
             t+=1
+
+        # Resect internal model to starting state after episode
+        self.internal_model.set_state(start_state)
 
         return (sa_visited, rtn)
 
