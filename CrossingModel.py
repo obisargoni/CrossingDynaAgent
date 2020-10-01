@@ -35,17 +35,23 @@ class MobileAgent(Agent):
         self._loc += (self._speed * np.sin(self._bearing), self._speed * np.cos(self._bearing))
         return
 
-    def getSpeed(self):
+    def get_speed(self):
         return self._speed
 
-    def getBearing(self):
+    def get_bearing(self):
         return self._bearing
 
-    def setBearing(self, b):
+    def set_bearing(self, b):
         self._bearing = b
 
-    def getLoc(self):
+    def get_loc(self):
         return self._loc
+
+    def set_loc(self, loc):
+        '''
+        loc {tuple} x,y of pedestrian
+        '''
+        self._loc = loc
 
 
 
@@ -99,7 +105,7 @@ class CrossingAlternative(Agent):
         self._ctype = ctype
         self._name = name
 
-    def getLoc(self):
+    def get_loc(self):
         return self._loc
 
     def getName(self):
@@ -260,7 +266,7 @@ class PedInternalModel():
         else:
             return q[a]
 
-    def setState(self, s):
+    def set_state(self, s):
         self._s = s
         self._terminal = False
 
@@ -337,7 +343,7 @@ class Ped(MobileAgent):
             opp_destf {array} Feature corresponding to the location opposite the agent's destination, where crossing takes the agent directly to its destination
         '''
 
-        self.internal_model.setState(ped_locf)
+        self.internal_model.set_state(ped_locf)
 
         k=0
         while np.equal(self.internal_model._s, opp_destf).all() == False:
@@ -348,7 +354,7 @@ class Ped(MobileAgent):
         p_fwd = 1-p_cross
 
         # Reset the internal model state to the state the ped is currently in
-        self.internal_model.setState(ped_locf)
+        self.internal_model.set_state(ped_locf)
 
         self.search_policy = [(0, 1), (p_fwd, p_cross)]
 
