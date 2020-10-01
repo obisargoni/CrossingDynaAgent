@@ -355,6 +355,11 @@ class Ped(MobileAgent):
             self.internal_model.step(0)
             k+=1
 
+            # Hack to avoid infinite loop when ped has walked past opp_dest_feature
+            if k > self._tg.N:
+                k = 0
+                break
+
         p_cross = 1 / (k + 1)
         p_fwd = 1-p_cross
 
