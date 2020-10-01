@@ -213,6 +213,10 @@ class PedInternalModel():
                 break
         return state_node
 
+    def state_actions(self):
+        for (i,j,a) in self._mdp.edges(nbunch=self._sn, data='action'):
+            yield a
+
     def step(self, a):
         '''Progress to new state following action a
         '''
@@ -357,12 +361,15 @@ class Ped(MobileAgent):
         # Reset the internal model state to the state the ped is currently in
         self.internal_model.set_state(ped_locf)
 
-        self.search_policy = [(0, 1), (p_fwd, p_cross)]
+        self.search_policy = (p_fwd, p_cross)
 
-    def choose_search_action(self, policy):
-        possible_actions = policy[0]
-        action_probabilities = policy[1]
-        a = np.random.choice(possible_actions, p = action_probabilities)
+    def choose_search_action(self, possible_actions, action_probabilities):
+        a = None
+        if len(possible_actions) == 1:
+            a = possible_actions[0]
+        else:
+            p = [action_probabilities[a] for a in possible_actions]
+            a = np.random.choice(possible_actions, p = p)
         return a
 
     def run_episode_return_states_actions_total_return(self, policy):
@@ -373,7 +380,12 @@ class Ped(MobileAgent):
         t = 0
         while self.internal_model._terminal == False:
             s = self.internal_model._s
-            a = self.choose_search_action(policy)
+
+            # get available actions
+            possible_actions = list(self.internal_model.state_actions())
+
+            # choose action using policy
+            a = self.choose_search_action(possible_actions, policy)
             sa_visited.append((s, a))
             new_s, reward = self.internal_model.step(a)
             rtn += reward*(self._g**t) # Discount reward and add to total return
