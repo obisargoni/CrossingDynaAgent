@@ -175,10 +175,9 @@ class PedInternalModel():
                 fi = self._tg.feature((exi, ey))
                 fj = self._tg.feature((exj, ey))
 
-                if (node_i not in self.dict_id_feature.keys()):
-                    self.dict_id_feature[node_i] = fi
-                if (node_j not in self.dict_id_feature.keys()):
-                    self.dict_id_feature[node_j] = fj
+                # Duplicates adding features to dict but think this might be faster than checking
+                self.dict_id_feature[node_i] = fi
+                self.dict_id_feature[node_j] = fj
 
                 # Add directed edge to graph if not at last edge
                 if (ix == len(tg_edgesx)-2) & (iy == 0):
