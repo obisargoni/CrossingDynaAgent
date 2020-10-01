@@ -219,16 +219,13 @@ class PedInternalModel():
         # Initialise the reward
         r = 0
 
-        state_node = self.state_node(self._s)
-
         # Find node that results from taking this action
-        for e in self._mdp.edges(nbunch=state_node, data='action'):
+        for e in self._mdp.edges(nbunch=self._sn, data='action'):
             if e[2] == a:
                 r = self.reward(self._s, a)
-                self._s = new_s
+                self._sn = e[1]
                 self._s = self.dict_node_state[self._sn] 
                 break
-
 
         # If reached destination set terminal to true
         if np.equal(self._s, self._dest_feature).all():
@@ -264,6 +261,7 @@ class PedInternalModel():
 
     def set_state(self, s):
         self._s = s
+        self._sn = self.state_node(s)
         self._terminal = False
 
     def isTerminal(self):
