@@ -479,6 +479,9 @@ class Ped(MobileAgent):
     def getDestination(self):
         return self._dest
 
+    def set_dest(self, d):
+        self._dest = d
+
 
 class Vehicle(MobileAgent):
 
