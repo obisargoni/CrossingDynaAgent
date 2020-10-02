@@ -74,7 +74,7 @@ loc_feature = ped._tg.feature(ped._loc)
 ped.set_search_policy(loc_feature, ped._opp_dest_feature)
 
 # get number of foward steps before opposite dest
-k = int((1/ped.search_policy[1][1]) - 1)
+k = int((1/ped.search_policy[1]) - 1)
 
 actions = [0] * k
 for a in actions:
@@ -86,7 +86,7 @@ assert ped.internal_model.isTerminal()
 
 
 # Test going past opposite destination by 2 steps and crossing requires 2 steps to get to dest
-ped.internal_model.setState(loc_feature)
+ped.internal_model.set_state(loc_feature)
 actions = [0] * (k+2)
 for a in actions:
 	ped.internal_model.step(a)
@@ -100,7 +100,7 @@ assert ped.internal_model.isTerminal() == True
 
 
 # Test crossing straight away and walking ahead requires k steps after crossing
-ped.internal_model.setState(loc_feature)
+ped.internal_model.set_state(loc_feature)
 
 ped.internal_model.step(1)
 
@@ -112,7 +112,7 @@ assert n == k
 
 
 # Test reaching end of starting side of road is stuck on same state if continues to take forward action
-ped.internal_model.setState(loc_feature)
+ped.internal_model.set_state(loc_feature)
 end_road_feature = ped._tg.feature((100,0))
 end_state_node = ped.internal_model.state_node(end_road_feature)
 nsteps = int(end_state_node)
@@ -138,3 +138,38 @@ while ped.internal_model.isTerminal() == False:
 	n+=1
 assert n == (nsteps - k)
 
+
+################################
+#
+#
+# test direction of ped movement given action
+#
+#
+################################
+
+l = (0,0)
+ped.set_loc(l)
+ped.set_dest((0,1))
+a = 0
+ped.walk(a)
+assert ped._loc[0] > l[0]
+
+l = (3,0)
+ped.set_loc(l)
+ped.set_dest((5,1))
+ped.walk(a)
+assert ped._loc[0] > l[0]
+
+l = (3,0)
+ped.set_loc(l)
+ped.set_dest((1,1))
+ped.walk(a)
+assert ped._loc[0] < l[0]
+
+l = (3,0)
+ped.set_loc(l)
+ped.set_dest((1,1))
+a = 1
+ped.walk(a)
+assert ped._loc[0] == l[0]
+assert ped._loc[1] > l[1]
