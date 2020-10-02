@@ -347,8 +347,11 @@ class Ped(MobileAgent):
         # Initialise an internal model of the street environment for the ped to use for planning
         self.internal_model = PedInternalModel(self._tg, cfs = self._crossings_features, destf = self._dest_feature, vs = model.getRoad().getVehicleFlow())
 
+        self.set_internal_model_state_and_search_policy()
 
-    def set_search_policy(self, ped_locf, opp_destf):
+
+
+    def set_search_policy(self, opp_destf):
         '''The agent explores its internal model using a search policy. The policy consists of the probability of taking actions
         move forward or cross road at each state. The policy probability is set such that the agent explores crossing close to its
         destination more frequently.
@@ -357,12 +360,9 @@ class Ped(MobileAgent):
         need r=1 success after k failures, with k the number of times the agent has to continue straight between states.
 
         Args:
-            ped_locf {array} Feature corresponding to the pedestrian agent's current location
             opp_destf {array} Feature corresponding to the location opposite the agent's destination, where crossing takes the agent directly to its destination
         '''
-
-        self.internal_model.set_state(ped_locf)
-
+        start_state = self.internal_model._s
         k=0
         while np.equal(self.internal_model._s, opp_destf).all() == False:
             self.internal_model.step(0)
@@ -377,7 +377,7 @@ class Ped(MobileAgent):
         p_fwd = 1-p_cross
 
         # Reset the internal model state to the state the ped is currently in
-        self.internal_model.set_state(ped_locf)
+        self.internal_model.set_state(start_state)
 
         self.search_policy = (p_fwd, p_cross)
 
@@ -448,8 +448,7 @@ class Ped(MobileAgent):
         if (self.internal_model.isTerminal() == False):
 
             # Update current state of internal model to be peds current position and set the search policy
-            loc_feature = self._tg.feature(self._loc)
-            self.set_search_policy(loc_feature,self._opp_dest_feature)
+            self.set_internal_model_state_and_search_policy()
 
             # Run MC update a certain number of times -  this is the deliberation before next step
             for i in range(nupdates):
@@ -480,6 +479,13 @@ class Ped(MobileAgent):
 
         # move the ped along
         self.move()
+
+
+    def set_internal_model_state_and_search_policy(self):
+        # Update current state of internal model to be peds current position and set the search policy
+        loc_feature = self._tg.feature(self._loc)
+        self.internal_model.set_state(loc_feature)
+        self.set_search_policy(self._opp_dest_feature)
 
 
     def getDestination(self):
