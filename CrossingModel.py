@@ -456,9 +456,8 @@ class Ped(MobileAgent):
             for i in range(nupdates):
                 self.mc_update_of_internal_model()
 
-            # Now choose greedy action
+            # Now choose greedy action and walk in corresponding direction
             a = self.greedy_action()
-
             self.walk(a)
 
         else:
