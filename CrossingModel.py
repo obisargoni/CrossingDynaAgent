@@ -470,7 +470,7 @@ class Ped(MobileAgent):
 
         # a == 0 means walk toward destination, bearing either pi/2 or -pi/2. a == 1 means cross road, bearing = 0
         if a == 0:
-            if np.sign(vector_to_dest[0]) == -1:
+            if (np.sign(vector_to_dest[0]) == -1) & (self._loc[1] > 5):
                 self._bearing = -np.pi/2
             else:
                 self._bearing = np.pi/2
