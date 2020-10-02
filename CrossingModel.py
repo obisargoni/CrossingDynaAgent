@@ -217,6 +217,10 @@ class PedInternalModel():
         for (i,j,a) in self._mdp.edges(nbunch=self._sn, data='action'):
             yield a
 
+    def state_action_values(self):
+        for a in self.state_actions():
+            yield (a, self.q(self._s, a))
+
     def step(self, a):
         '''Progress to new state following action a
         '''
