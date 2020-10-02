@@ -434,12 +434,6 @@ class Ped(MobileAgent):
         best action at current state.
         '''
 
-        # Set the current state of the internal model as the ped's current location
-        loc_feature = self._tg.feature(self._loc)
-
-        # Set search policy. This method sets the current state of ped's internal model to be state corresponding to ped's current location
-        self.set_search_policy(loc_feature,self._opp_dest_feature)
-
         sa_visited, rtn = self.run_episode_return_states_actions_total_return(self.search_policy)
 
         # Use this to update weights using the return
@@ -453,6 +447,11 @@ class Ped(MobileAgent):
 
         # Check if ped has reached its destination
         if (self.internal_model.isTerminal() == False):
+
+            # Update current state of internal model to be peds current position and set the search policy
+            loc_feature = self._tg.feature(self._loc)
+            self.set_search_policy(loc_feature,self._opp_dest_feature)
+
             # Run MC update a certain number of times -  this is the deliberation before next step
             for i in range(nupdates):
                 self.mc_update_of_internal_model()
