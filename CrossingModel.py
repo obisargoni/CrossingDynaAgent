@@ -449,12 +449,12 @@ class Ped(MobileAgent):
             self.internal_model.N[:,a] += s
 
 
-    def step(self):
+    def step(self, nupdates = 0):
 
         # Check if ped has reached its destination
         if (self.internal_model.isTerminal() == False):
             # Run MC update a certain number of times -  this is the deliberation before next step
-            for i in range(10):
+            for i in range(nupdates):
                 self.mc_update_of_internal_model()
 
             # Now choose greedy action
