@@ -450,6 +450,27 @@ class Ped(MobileAgent):
             # When agent is done remove from schedule
             self.model.schedule.remove(self)
 
+    def walk(self, a):
+        '''
+        Given an action, determine the direction of movement and move in that direction
+        '''
+        vector_to_dest = [self._dest[i] - self._loc[i] for i in range(len(self._loc))]
+
+        # a == 0 means walk toward destination, bearing either pi/2 or -pi/2. a == 1 means cross road, bearing = 0
+        if a == 0:
+            if np.sign(vector_to_dest[0]) == -1:
+                self._bearing = -np.pi/2
+            else:
+                self._bearing = np.pi/2
+        elif a ==1:
+            self._bearing = 0
+
+        self._loc_history = np.append(self._loc_history, self._loc)
+        
+        # move the ped along
+        self.move()
+
+
     def getDestination(self):
         return self._dest
 
