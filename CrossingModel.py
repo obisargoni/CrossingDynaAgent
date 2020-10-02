@@ -201,6 +201,10 @@ class PedInternalModel():
                 if np.equal(fj,self._dest_feature).all():
                     edge_direction = '-'
 
+                    # Connect destination to itself
+                    self._mdp.add_edge(node_j, node_j, action = 0)
+
+
         # Connect features across the road with cross actions
         for ix, ex in enumerate(tg_edgesx):
             node_i = str(0)+str(ix)
