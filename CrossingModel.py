@@ -440,12 +440,17 @@ class Ped(MobileAgent):
 
     def step(self):
 
-        # Check if ped has reached end of the road or if it has chosen a crossing
-        if (self.getLoc() < self._road_length):
+        # Check if ped has reached its destination
+        if (self.internal_model.isTerminal() == False):
+            # Run MC update a certain number of times -  this is the deliberation before next step
+            for i in range(10):
+                self.mc_update_of_internal_model()
 
-            self._loc_history = np.append(self._loc_history, self._loc)
-            # move the ped along
-            self.move()
+            # Now choose greedy action
+            a = self.greedy_action()
+
+            self.walk(a)
+
         else:
             # When agent is done remove from schedule
             self.model.schedule.remove(self)
