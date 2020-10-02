@@ -120,7 +120,6 @@ class PedInternalModel():
 
     _mdp = None
     _s = None
-    _terminal = False
 
     _crossing_features = None
     _dest_feature = None
@@ -244,10 +243,6 @@ class PedInternalModel():
                 self._s = self.dict_node_state[self._sn] 
                 break
 
-        # If reached destination set terminal to true
-        if np.equal(self._s, self._dest_feature).all():
-            self._terminal = True
-
         return (self._s, r)
 
     def reward(self, s, a):
@@ -279,10 +274,9 @@ class PedInternalModel():
     def set_state(self, s):
         self._s = s
         self._sn = self.state_node(s)
-        self._terminal = False
 
     def isTerminal(self):
-        return self._terminal
+        return np.equal(self._s, self._dest_feature).all()
 
     def log_values(self):
         self._w_log = np.append(self._w_log, self._w)
@@ -413,7 +407,7 @@ class Ped(MobileAgent):
         rtn = 0
         t = 0
         start_state = self.internal_model._s
-        while self.internal_model._terminal == False:
+        while self.internal_model.isTerminal() == False:
             s = self.internal_model._s
 
             # get available actions
