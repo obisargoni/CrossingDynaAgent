@@ -29,7 +29,7 @@ class MobileAgent(Agent):
         self._speed = s
         self._bearing = b
 
-        self._loc_history = np.array([])
+        self._loc_history = []
 
     def move(self):
         self._loc = (self._loc[0] + self._speed * np.sin(self._bearing), self._loc[1] + self._speed * np.cos(self._bearing))
@@ -52,6 +52,8 @@ class MobileAgent(Agent):
         loc {tuple} x,y of pedestrian
         '''
         self._loc = loc
+        self._loc_history = []
+
 
 
 
@@ -478,7 +480,7 @@ class Ped(MobileAgent):
         elif a ==1:
             self._bearing = 0
 
-        self._loc_history = np.append(self._loc_history, self._loc)
+        self._loc_history.append(self._loc)
         
         # move the ped along
         self.move()
@@ -501,7 +503,7 @@ class Vehicle(MobileAgent):
         # Check if ped has reached end of the road or if it has chosen a crossing
         if (self.get_loc() < self._road_length):
 
-            self._loc_history = np.append(self._loc_history, self._loc)
+            self._loc_history.append(self._loc)
             # move the agent along
             self.move()
         else:
