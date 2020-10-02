@@ -33,6 +33,7 @@ class MobileAgent(Agent):
 
     def move(self):
         self._loc = (self._loc[0] + self._speed * np.sin(self._bearing), self._loc[1] + self._speed * np.cos(self._bearing))
+        self._loc_history.append(self._loc)
         return
 
     def get_speed(self):
@@ -477,8 +478,6 @@ class Ped(MobileAgent):
         elif a ==1:
             self._bearing = 0
 
-        self._loc_history.append(self._loc)
-        
         # move the ped along
         self.move()
 
