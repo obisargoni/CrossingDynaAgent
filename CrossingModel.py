@@ -396,10 +396,11 @@ class Ped(MobileAgent):
         '''
         q_max = -sys.maxsize
         a_chosen = None
-        for a, q in self.state_action_values():
+        for a, q in self.internal_model.state_action_values():
             if q > q_max:
                 a_chosen = a
-        return a
+                q_max = q
+        return a_chosen
 
     def run_episode_return_states_actions_total_return(self, policy):
         # Run episode, get states and actions visited and total discounted return
