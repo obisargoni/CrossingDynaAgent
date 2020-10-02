@@ -381,6 +381,16 @@ class Ped(MobileAgent):
             a = np.random.choice(possible_actions, p = p)
         return a
 
+    def greedy_action(self):
+        '''Find the action that have the highest associated value. Take that action
+        '''
+        q_max = -sys.maxsize
+        a_chosen = None
+        for a, q in self.state_action_values():
+            if q > q_max:
+                a_chosen = a
+        return a
+
     def run_episode_return_states_actions_total_return(self, policy):
         # Run episode, get states and actions visited and total discounted return
         # This currently works out as every visit monte carlo update
