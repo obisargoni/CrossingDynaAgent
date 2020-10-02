@@ -142,6 +142,9 @@ class PedInternalModel():
 
         self._sss = (self._tg.N, 2)
 
+        self._w_log = np.array([])
+        self._N_log = np.array([])
+
         self.reset_values()
 
         self.build_mdp()
@@ -274,6 +277,11 @@ class PedInternalModel():
 
     def isTerminal(self):
         return self._terminal
+
+    def log_values(self):
+        self._w_log = np.append(self._w_log, self._w)
+        self._N_log = np.append(self._N_log, self._N)
+
 
     def reset_values(self):
         # Initialise weights with arbitary low value so that agent doesn't take action it has not considered with internal model
