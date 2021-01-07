@@ -57,8 +57,7 @@ class MobileAgent(Agent):
 
 
 
-
-class Road(Agent):
+class Road:
 
     _length = None
     _width = None
@@ -68,8 +67,7 @@ class Road(Agent):
     _vehicles = None
     _buildings = None
 
-    def __init__(self, unique_id, model, l, w, nl, xcoords = None, vf = None, blds = None):
-        super().__init__(unique_id, model)
+    def __init__(self, l, w, nl, xcoords = None, vf = None, blds = None):
         self._length = l
         self._width = w
         self._nlanes = nl
@@ -117,37 +115,32 @@ class CrossingAlternative(Agent):
     def getCrossingType(self):
         return self._ctype
 
-class PedInternalModel():
+
+class RoadEnv(Agent):
 
     _mdp = None
-    _s = None
 
     _crossing_features = None
     _dest_feature = None
-    _vehicles = None
+    _road = None
 
-    def __init__(self, tg, cfs = None, destf = None, vs = None):
+    def __init__(self, unique_id, model, tg, cfs = None, destf = None, r = None):
         '''
         tg {TilingGroup} The tiling used to discretise the environment
-        s {array} The feature vector corresponding to the agent's current state
         cfs {list} A list of arrays corresponding to all locations that correspond to crossing infrastructure
         destf {array} The feature vector of the agent's destination
-        vs {int} The number of vehicles on the road.
+        r {Road} The Road object in the road environment
         '''
-        
+        super().__init__(unique_id, model)
+
         # The tiling group used by the agent to discretise space
         self._tg = tg
 
         self._crossing_features = cfs
         self._dest_feature = destf
-        self._vehicles = vs
+        self._road = r
 
         self._sss = (self._tg.N, 2)
-
-        self._w_log = np.array([])
-        self._N_log = np.array([])
-
-        self.reset_values()
 
         self.build_mdp()
 
@@ -226,23 +219,36 @@ class PedInternalModel():
         for (i,j,a) in self._mdp.edges(nbunch=self._sn, data='action'):
             yield a
 
-    def state_action_values(self):
-        for a in self.state_actions():
-            yield (a, self.q(self._s, a))
+    def possible_actions(self):
+        for a in (0,1):
+            yield a
 
     def step(self, a):
-        '''Progress to new state following action a
+        '''Given action taken by ped agent, update pedestrian's location, update state of the environment correspondingly, calculate the reward and return new 
+        state and reward.
         '''
         # Initialise the reward
         r = 0
 
-        # Find node that results from taking this action
-        for e in self._mdp.edges(nbunch=self._sn, data='action'):
-            if e[2] == a:
-                r = self.reward(self._s, a)
-                self._sn = e[1]
-                self._s = self.dict_node_state[self._sn] 
-                break
+        # Update positions of agents based on this action
+        self.model.ped.walk(a)
+
+        # Constrain peds location to within the bounds of the road
+        if self.model.ped._loc[0] > self._road._length:
+            self.model.ped._loc[0] = self._road._length
+        elif self.model.ped._loc[1] > self._road._width / 2:
+            self.model.ped._loc[1] = self._road._width / 2
+        elif self.model.ped._loc[1] > -self._road._width / 2:
+            self.model.ped._loc[1] = -self._road._width / 2
+
+        # Use tilings to find new state
+        new_state = self._tg.feature(self.model.ped._loc)
+
+        # Calculate reward
+        r = self.reward(new_state, a)
+
+        # update road environment state
+        self.set_state(new_state)
 
         return (self._s, r)
 
@@ -261,16 +267,8 @@ class PedInternalModel():
                 return 0
             else:
                 # Return value to reflect exposure of vehicles
-                return -1*self._vehicles
+                return -1*self._road.getVehicleFlow()
 
-    def q(self, s, a = None):
-        '''Get value of state-action
-        '''
-        q = np.matmul(s, self._w)
-        if a is None:
-            return q
-        else:
-            return q[a]
 
     def set_state(self, s):
         self._s = s
@@ -279,77 +277,92 @@ class PedInternalModel():
     def isTerminal(self):
         return np.equal(self._s, self._dest_feature).all()
 
-    def log_values(self):
-        self._w_log = np.append(self._w_log, self._w)
-        self._N_log = np.append(self._N_log, self._N)
-
-
-    def reset_values(self):
-        # Initialise weights with arbitary low value so that agent doesn't take action it has not considered with internal model
-        self._w = np.full(self._sss, -10.0)
-
-        # Record number of times states visited
-        self._N = np.zeros(self._sss)
-
     @property
     def state(self):
         return self._s
 
     @property
-    def w(self):
-        return self._w
-
-    @property
     def sss(self):
         return self._sss
-    
-    @property
-    def N(self):
-        return self._N
+
+class ModelRoadEnv():
+    '''Class used to represent an agent's model of the environment, which they do planning with and update with real experience
+    '''
+
+    _model = None
+    _rand = None
+
+    def __init__(self, rand = np.random):
+        self._rand = rand
+        self._model = dict()
+
+    def step(self, s, a):
+        '''Progress to new state following action a
+        '''
+        # Sample a next-state and reward from experience
+        next_state, reward, time = self._rand.choice(self.model[tuple(state)][action])
+
+        return (next_state, reward)
+
+    def update(self, state, action, next_state, reward):
+        '''Update the model of the environment with experience from real environment
+
+        #######################################################################
+        # Copyright (C)                                                       #
+        # 2016-2018 Shangtong Zhang(zhangshangtong.cpp@gmail.com)             #
+        # 2016 Kenta Shimada(hyperkentakun@gmail.com)                         #
+        # Permission given to modify the code as long as you keep this        #
+        # declaration at the top                                              #
+        #######################################################################
+        '''
+
+        state = deepcopy(state)
+        next_state = deepcopy(next_state)
+
+        if tuple(state) not in self.model.keys():
+            self.model[tuple(state)] = dict()
+
+            # Initialise with actions so that planning can consider any available action from this state
+            for action_ in [0,1]:
+                if action_ != action:
+                    # Such actions would lead back to the same state with a reward of zero
+                    # Notice that the minimum time stamp is 1 instead of 0
+                    self.model[tuple(state)][action_] = [list(state), 0, 1]
+
+        self.model[tuple(state)][action] = [list(next_state), reward, self.time]
 
 
 
 class Ped(MobileAgent):
 
-    def __init__(self, unique_id, model, l, b, s, d, g, a):
+    def __init__(self, unique_id, env, l, b, s, g, alpha):
         '''
         unique_id {int} Unique ID used to index agent
-        model {mesa.Model} The model environment agent is placed in
+        env {mesa.Model} The model environment agent is placed in
         l {tuple} The starting location of the agent
         b {tuple} The starting bearing of the agent
         s {double} The speed of the agent
-        d {tuple} The destination of the agent
+        actions {tuple} The actions available to the agent
         g {double} The discount factor applied to future rewards by the agent
         a {double} Step size of update to feature vector weights
         '''
-        super().__init__(unique_id, model, l, s, b)
-        self._dest = d
-        self._road_length = model.getRoad().getLength()
-        self._road_width = model.getRoad().getWidth()
-        self._crossing_coordinates = model.getRoad().getCrossingCoords()
+        super().__init__(unique_id, env, l, s, b)
         self._g = g
-        self._a = a
+        self._alpha = alpha
 
-        # Note location opposite destination on agent's side of the road
-        self._opp_dest = (self._dest[0], self._loc[1])
+        # initialise weights and n visits log
+        self._w_log = np.array([])
+        self._N_log = np.array([])
 
-        # Initilise tiling group agent uses to discetise space
-        ngroups = 2
-        tiling_limits = [(0,self._road_length), (0, self._road_width)]
-        ntiles = [25, 2]
+        # initialise value function
+        self.reset_values(env.road_env.sss)
 
-        self._tg = TilingGroup(ngroups, tiling_limits, ntiles)
-
-        self._dest_feature = self._tg.feature(self._dest)
-        self._crossings_features = [self._tg.feature(c) for c in self._crossing_coordinates]
-        self._opp_dest_feature = self._tg.feature(self._opp_dest)
-
-        # Initialise an internal model of the street environment for the ped to use for planning
-        self.internal_model = PedInternalModel(self._tg, cfs = self._crossings_features, destf = self._dest_feature, vs = model.getRoad().getVehicleFlow())
+        # initialise model of env used for planning
+        self.model_env = ModelRoadEnv(rand = np.random)
 
         self.set_internal_model_state_and_search_policy()
 
-
+        self.set_search_policy(self._opp_dest_feature)
 
     def set_search_policy(self, opp_destf):
         '''The agent explores its internal model using a search policy. The policy consists of the probability of taking actions
@@ -362,14 +375,14 @@ class Ped(MobileAgent):
         Args:
             opp_destf {array} Feature corresponding to the location opposite the agent's destination, where crossing takes the agent directly to its destination
         '''
-        start_state = self.internal_model._s
+        start_state = self.env.road_env.state
         k=0
-        while np.equal(self.internal_model._s, opp_destf).all() == False:
-            self.internal_model.step(0)
+        while np.equal(self.env.road_env.state, opp_destf).all() == False:
+            self.env.road_env.step(0)
             k+=1
 
             # Hack to avoid infinite loop when ped has walked past opp_dest_feature
-            if k > self._tg.N:
+            if k > self.env.road_env._tg.N:
                 k = 0
                 break
 
@@ -377,7 +390,7 @@ class Ped(MobileAgent):
         p_fwd = 1-p_cross
 
         # Reset the internal model state to the state the ped is currently in
-        self.internal_model.set_state(start_state)
+        self.env.road_env.set_state(start_state)
 
         self.search_policy = (p_fwd, p_cross)
 
@@ -390,77 +403,63 @@ class Ped(MobileAgent):
             a = np.random.choice(possible_actions, p = p)
         return a
 
-    def greedy_action(self):
+    def greedy_action(self, env):
         '''Find the action that have the highest associated value. Take that action
         '''
         q_max = -sys.maxsize
         a_chosen = None
-        for a, q in self.internal_model.state_action_values():
+        for a in env.possible_actions():
+            q = self.q(a)
             if q > q_max:
                 a_chosen = a
                 q_max = q
         return a_chosen
 
-    def run_episode_return_states_actions_total_return(self, policy):
-        # Run episode, get states and actions visited and total discounted return
-        # This currently works out as every visit monte carlo update
-        sa_visited = []
-        rtn = 0
-        t = 0
-        start_state = self.internal_model._s
-        while self.internal_model.isTerminal() == False:
-            s = self.internal_model._s
 
-            # get available actions
-            possible_actions = list(self.internal_model.state_actions())
-
-            # choose action using policy
-            a = self.choose_search_action(possible_actions, policy)
-            sa_visited.append((s, a))
-
-            # take action
-            new_s, reward = self.internal_model.step(a)
-            rtn += reward*(self._g**t) # Discount reward and add to total return
-            t+=1
-
-        # Resect internal model to starting state after episode
-        self.internal_model.set_state(start_state)
-
-        return (sa_visited, rtn)
-
-    def mc_update_of_internal_model(self):
-        '''Help inform what action to take now by exploring the internal model of the road environment, using it to plan
-        best action at current state.
-        '''
-
-        sa_visited, rtn = self.run_episode_return_states_actions_total_return(self.search_policy)
-
-        # Use this to update weights using the return
-        for s,a in sa_visited:
-            td_error = rtn - self.internal_model.q(s, a = a)
-            self.internal_model.w[:, a] += self._a * td_error * s
-            self.internal_model.N[:,a] += s
-
-
-    def step(self, nupdates = 0):
+    def step(self, nplanningsteps = 0):
 
         # Check if ped has reached its destination
-        if (self.internal_model.isTerminal() == False):
+        if (self.env.road_env.isTerminal() == False):
 
-            # Update current state of internal model to be peds current position and set the search policy
-            self.set_internal_model_state_and_search_policy()
+            # Do planning using internal model of env
+            s = self.env.road_env.state
+            t = 0
+            rtn = 0
+            for i in range(nplanningsteps):
 
-            # Run MC update a certain number of times -  this is the deliberation before next step
-            for i in range(nupdates):
-                self.mc_update_of_internal_model()
+                # Choose action
+                possible_actions = list(self.model_env.possible_actions())
+                a = self.choose_search_action(possible_actions, policy)
 
-            # Now choose greedy action and walk in corresponding direction
+                sa_visited.append((s, a))
+
+                # Sample next state and reward
+                new_s, reward = self.model_env.step(s, a)
+                rtn += reward*(self._g**t) # Discount reward and add to total return
+                t+=1
+
+            # Update value function with planning steps
+            for s, a in sa_visited:
+                td_error = rtn - self.q(s, a = a)
+                self.w[:, a] += self._alpha * td_error * s
+                self.N[:,a] += s
+
+            # Now take greedy action
             a = self.greedy_action()
-            self.walk(a)
+            next_state, r = self.env.road_env.step(a)
+
+            # Update value function with real reward from env
+            td_error = r - self.q(s, a = a)
+            self.w[:, a] += self._alpha * td_error * s
+            self.N[:,a] += s
+
+            # Update internal model
+            self.model_env.update(s, a, next_state, r)
+
 
         else:
             # When agent is done remove from schedule
-            self.model.schedule.remove(self)
+            self.env.schedule.remove(self)
 
     def walk(self, a):
         '''
@@ -481,19 +480,39 @@ class Ped(MobileAgent):
         self.move()
 
 
-    def set_internal_model_state_and_search_policy(self):
-        # Update current state of internal model to be peds current position and set the search policy
-        loc_feature = self._tg.feature(self._loc)
-        self.internal_model.set_state(loc_feature)
-        self.set_search_policy(self._opp_dest_feature)
-
-
     def getDestination(self):
         return self._dest
 
     def set_dest(self, d):
         self._dest = d
 
+    def reset_values(self, sss):
+        # Initialise weights with arbitary low value so that agent doesn't take action it has not considered with internal model
+        self._w = np.full(sss, -10.0)
+
+        # Record number of times states visited
+        self._N = np.zeros(sss)
+
+    def q(self, s, a = None):
+        '''Get value of state-action
+        '''
+        q = np.matmul(s, self._w)
+        if a is None:
+            return q
+        else:
+            return q[a]
+
+    @property
+    def N(self):
+        return self._N
+
+    @property
+    def w(self):
+        return self._w
+
+    def log_values(self):
+        self._w_log = np.append(self._w_log, self._w)
+        self._N_log = np.append(self._N_log, self._N)
 
 class Vehicle(MobileAgent):
 
@@ -522,12 +541,7 @@ class CrossingModel(Model):
 
         # Create the road
         uid = 0
-
-        crossing_start = int(road_length*0.75 - 2)
-        crossing_end = int(road_length*0.75 + 2)
-        crossing_coords = [(x,y) for x,y in itertools.product(range(crossing_start, crossing_end), [0,road_width])]
-
-        self.road = Road(uid, self, road_length, road_width, n_lanes, xcoords = crossing_coords, vf = vehicle_flow, blds = None)
+        init_road_env(self, uid, road_length, road_width, vehicle_flow, n_lanes, ped_destination)
 
         # Create the ped
         uid += 1
@@ -538,15 +552,38 @@ class CrossingModel(Model):
 
         self.datacollector = DataCollector(agent_reporters={"CrossingType": "chosenCAType"})
 
+    def init_road_env(self, road_uid, road_length, road_width, vehicle_flow, n_lanes, ped_destination):
+        '''Create the road env the pedestrian agent must learn to navigate
+        '''
+        crossing_start = int(road_length*0.75 - 2)
+        crossing_end = int(road_length*0.75 + 2)
+        crossing_coords = [(x,y) for x,y in itertools.product(range(crossing_start, crossing_end), [0,road_width])]
+
+        road = Road(road_uid, self, road_length, road_width, n_lanes, xcoords = crossing_coords, vf = vehicle_flow, blds = None)
+
+        # Note location opposite destination on agent's side of the road
+        opp_dest = (ped_destination[0], -1*ped_destination[1])
+
+        # Initilise tiling group agent uses to discetise space
+        ngroups = 2
+        tiling_limits = [(0,road_length), (0, road_width)]
+        ntiles = [25, 2]
+
+        tg = TilingGroup(ngroups, tiling_limits, ntiles)
+
+        dest_feature = tg.feature(ped_destination)
+        crossings_features = [tg.feature(c) for c in crossing_coords]
+        opp_dest_feature = tg.feature(opp_dest)
+
+        # Initialise an internal model of the street environment for the ped to use for planning
+        self.road_env = RoadEnv(tg, cfs = crossings_features, destf = dest_feature, vs = road.getVehicleFlow())
+
     def step(self):
         self.datacollector.collect(self)
         self.schedule.step()
         if self.schedule.get_agent_count() == 0:
             self.running = False
         self.nsteps += 1
-
-    def getRoad(self):
-        return self.road
 
     def getPed(self):
         return self.ped
