@@ -55,8 +55,6 @@ class MobileAgent(Agent):
         self._loc = loc
         self._loc_history = []
 
-
-
 class Road:
 
     _length = None
@@ -93,15 +91,14 @@ class Road:
     def getNLanes(self):
         return self._nlanes
 
-class CrossingAlternative(Agent):
+class CrossingAlternative:
 
     _loc = None
     _ctype = None
     _name = None
 
 
-    def __init__(self, unique_id, model, location = None, ctype = None, name = None):
-        super().__init__(unique_id, model)
+    def __init__(self, location = None, ctype = None, name = None):
         self._loc = location
         self._ctype = ctype
         self._name = name
@@ -208,7 +205,7 @@ class RoadEnv(Agent):
     def sss(self):
         return self._sss
 
-class ModelRoadEnv():
+class ModelRoadEnv:
     '''Class used to represent an agent's model of the environment, which they do planning with and update with real experience
     '''
 
