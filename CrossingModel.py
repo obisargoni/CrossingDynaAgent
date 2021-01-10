@@ -613,19 +613,16 @@ class CrossingModel(Model):
 
         self.datacollector = DataCollector(agent_reporters={"CrossingType": "chosenCAType"})
 
-    def init_road_env(self, road_uid, road_length, road_width, vehicle_flow, n_lanes, ped_destination):
+    def init_road_env(self, uid, road_length, road_width, vehicle_flow, n_lanes, ped_destination):
         '''Create the road env the pedestrian agent must learn to navigate
         '''
         crossing_start = int(road_length*0.75 - 2)
         crossing_end = int(road_length*0.75 + 2)
         crossing_coords = [(x,y) for x,y in itertools.product(range(crossing_start, crossing_end), [0,road_width])]
 
-        road = Road(road_uid, self, road_length, road_width, n_lanes, xcoords = crossing_coords, vf = vehicle_flow, blds = None)
+        road = Road(road_length, road_width, n_lanes, xcoords = crossing_coords, vf = vehicle_flow, blds = None)
 
-        # Note location opposite destination on agent's side of the road
-        opp_dest = (ped_destination[0], -1*ped_destination[1])
-
-        # Initilise tiling group agent uses to discetise space
+        # Initilise tiling group used to discetise space
         ngroups = 2
         tiling_limits = [(0,road_length), (0, road_width)]
         ntiles = [25, 2]
@@ -634,10 +631,13 @@ class CrossingModel(Model):
 
         dest_feature = tg.feature(ped_destination)
         crossings_features = [tg.feature(c) for c in crossing_coords]
+
+        # Note location opposite destination on agent's side of the road
+        opp_dest = (ped_destination[0], -1*ped_destination[1])
         opp_dest_feature = tg.feature(opp_dest)
 
         # Initialise an internal model of the street environment for the ped to use for planning
-        self.road_env = RoadEnv(tg, cfs = crossings_features, destf = dest_feature, vs = road.getVehicleFlow())
+        self.road_env = RoadEnv(self, uid, tg, cfs = crossings_features, destf = dest_feature, oppdestf = opp_dest_feature, vs = road.getVehicleFlow())
 
     def step(self):
         self.datacollector.collect(self)
