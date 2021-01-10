@@ -251,6 +251,17 @@ class ModelRoadEnv:
 
         self.model[tuple(state)][action] = [list(next_state), reward, self.time]
 
+    def state_actions(self, state):
+        '''Return the actions available to an agent from the input state
+        '''
+
+        if tuple(state) not in self.model.keys():
+            return None
+        else:
+            return tuple(self.model[tuple(state)].keys())
+
+
+
 class MDPModelRoadEnv:
 
     _s = None
