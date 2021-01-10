@@ -158,12 +158,16 @@ class RoadEnv(Agent):
         self.model.ped.walk(a)
 
         # Constrain peds location to within the bounds of the road
-        if self.model.ped._loc[0] > self._road._length:
-            self.model.ped._loc[0] = self._road._length
-        elif self.model.ped._loc[1] > self._road._width / 2:
-            self.model.ped._loc[1] = self._road._width / 2
-        elif self.model.ped._loc[1] > -self._road._width / 2:
-            self.model.ped._loc[1] = -self._road._width / 2
+        x = self.model.ped._loc[0] 
+        y = self.model.ped._loc[1] 
+        if x > self._road._length:
+            x = self._road._length
+        elif y > self._road._width:
+            y = self._road._width
+        elif y < 0:
+            y = 0
+
+        self.model.ped._loc = (x,y)
 
         # Use tilings to find new state
         new_state = self._tg.feature(self.model.ped._loc)
@@ -188,11 +192,13 @@ class RoadEnv(Agent):
             cross_on_inf = np.array([np.equal(s, cf).all() for cf in self._crossing_features]).any()
 
             if cross_on_inf:
-                return 0
+                return -1
             else:
                 # Return value to reflect exposure of vehicles
                 return -1*self._road.getVehicleFlow()
 
+    def set_state_from_ped_location(self, loc):
+        self._s = self._tg.feature(loc)
 
     def set_state(self, s):
         self._s = s
@@ -214,6 +220,7 @@ class ModelRoadEnv:
 
     _model = None
     _rand = None
+    _time = 1
 
     def __init__(self, rand = np.random):
         self._rand = rand
@@ -223,7 +230,9 @@ class ModelRoadEnv:
         '''Progress to new state following action a
         '''
         # Sample a next-state and reward from experience
-        next_state, reward, time = self._rand.choice(self.model[tuple(state)][action])
+        options = self._model[tuple(s)][a]
+        choice_index = np.random.choice(len(options))
+        next_state, reward, time = options[choice_index]
 
         return (next_state, reward)
 
@@ -238,32 +247,30 @@ class ModelRoadEnv:
         # declaration at the top                                              #
         #######################################################################
         '''
-
-        state = deepcopy(state)
-        next_state = deepcopy(next_state)
-
-        if tuple(state) not in self.model.keys():
-            self.model[tuple(state)] = dict()
+        if tuple(state) not in self._model.keys():
+            self._model[tuple(state)] = dict()
 
             # Initialise with actions so that planning can consider any available action from this state
             for action_ in [0,1]:
                 if action_ != action:
                     # Such actions would lead back to the same state with a reward of zero
                     # Notice that the minimum time stamp is 1 instead of 0
-                    self.model[tuple(state)][action_] = [list(state), 0, 1]
+                    self._model[tuple(state)][action_] = [[list(state), 0, 1]]
+                else:
+                    self._model[tuple(state)][action_] = []
 
-        self.model[tuple(state)][action] = [list(next_state), reward, self.time]
+
+        self._model[tuple(state)][action].append([list(next_state), reward, self._time])
+        self._time += 1
 
     def state_actions(self, state):
         '''Return the actions available to an agent from the input state
         '''
 
-        if tuple(state) not in self.model.keys():
+        if tuple(state) not in self._model.keys():
             return None
         else:
-            return tuple(self.model[tuple(state)].keys())
-
-
+            return tuple(self._model[tuple(state)].keys())
 
 class MDPModelRoadEnv:
 
@@ -409,7 +416,6 @@ class Vehicle(MobileAgent):
             # When agent is done remove from schedule
             self.model.schedule.remove(self)
 
-
 class Ped(MobileAgent):
 
     def __init__(self, unique_id, env, l, d, dd, b, s, g, alpha):
@@ -426,10 +432,13 @@ class Ped(MobileAgent):
         a {double} Step size of update to feature vector weights
         '''
         super().__init__(unique_id, env, l, s, b)
+        self._origin = l
         self.d = d
         self.dd = dd
         self._g = g
         self._alpha = alpha
+        self._epsilon = 0.5
+        self._nepochs = 0
 
         # initialise weights and n visits log
         self._w_log = np.array([])
@@ -485,71 +494,90 @@ class Ped(MobileAgent):
             a = np.random.choice(possible_actions, p = p)
         return a
 
-    def epsilon_greedy_action(self, possible_actions, epsilon):
+    def epsilon_greedy_action(self, state, possible_actions, epsilon):
 
         if np.random.rand() > epsilon:
-            return self.greedy_action(possible_actions)
+            return self.greedy_action(state, possible_actions)
         else:
             return np.random.choice(possible_actions)
 
 
-    def greedy_action(self, possible_actions):
+    def greedy_action(self, state, possible_actions):
         '''Find the action that have the highest associated value. Take that action
         '''
         q_max = -sys.maxsize
         a_chosen = None
         for a in possible_actions:
-            q = self.q(a)
+            q = self.q(state, a  = a)
             if q > q_max:
                 a_chosen = a
                 q_max = q
         return a_chosen
 
 
-    def step(self, nplanningsteps = 0):
+    def dyna_step(self, nplanningsteps = 0):
 
-        # Check if ped has reached its destination
-        if (self._env.road_env.isTerminal() == False):
+        # Do planning using internal model of env
+        s = self._env.road_env.state
+        t = 0
+        rtn = 0
+        sa_visited = []
+        for i in range(nplanningsteps):
 
-            # Do planning using internal model of env
-            s = self._env.road_env.state
-            t = 0
-            rtn = 0
-            for i in range(nplanningsteps):
+            # Choose action
+            possible_actions = self.model_env.state_actions(s)
 
-                # Choose action
-                possible_actions = self.model_env.state_actions(s)
-                a = self.epsilon_greedy_action(possible_actions, policy)
+            if possible_actions is None:
+                continue
 
-                sa_visited.append((s, a))
+            a = self.epsilon_greedy_action(s, possible_actions, self._epsilon)
 
-                # Sample next state and reward
-                new_s, reward = self.model_env.step(s, a)
-                rtn += reward*(self._g**t) # Discount reward and add to total return
-                t+=1
-                s = new_s
+            sa_visited.append((s, a))
 
-            # Update value function with planning steps
-            for s, a in sa_visited:
-                td_error = rtn - self.q(s, a = a)
-                self.w[:, a] += self._alpha * td_error * s
-                self.N[:,a] += s
+            # Sample next state and reward
+            new_s, reward = self.model_env.step(s, a)
+            rtn += reward*(self._g**t) # Discount reward and add to total return
+            t+=1
+            s = new_s
 
-            # Now take greedy action
-            possible_actions = list(self._env.road_env.possible_actions())
-            a = self.greedy_action(possible_actions)
-            next_state, r = self._env.road_env.step(a)
-
-            # Update value function with real reward from env
-            td_error = r - self.q(s, a = a)
+        # Update value function with planning steps
+        for s, a in sa_visited:
+            td_error = rtn - self.q(s, a = a)
             self.w[:, a] += self._alpha * td_error * s
             self.N[:,a] += s
 
-            # Update internal model
-            self.model_env.update(s, a, next_state, r)
+        # Now take greedy action
+        possible_actions = list(self._env.road_env.possible_actions())
+        a = self.epsilon_greedy_action(self._env.road_env.state, possible_actions, self._epsilon)
+        next_state, r = self._env.road_env.step(a)
 
-        else:
-            # When agent is done remove from schedule
+        # Update value function with real reward from env
+        td_error = r - self.q(s, a = a)
+        self.w[:, a] += self._alpha * td_error * s
+        self.N[:,a] += s
+
+        # Update internal model
+        self.model_env.update(s, a, next_state, r)
+
+    def train(self, nplanningsteps):
+        '''Train the agent over multiple epochs
+        '''
+        self.dyna_step(nplanningsteps)
+
+        # if destination is reached reset environment and increase epoch count
+        if (self._env.road_env.isTerminal() == False):
+            self._loc = self._origin
+            self._env.road_env.set_state_from_ped_location(self._loc)
+            self._nepochs += 1
+
+    def step(self, nplanningsteps):
+        '''Method to use when agent has been trained
+        '''
+
+        self.dyna_step(nplanningsteps)
+
+        # When agent is done remove from schedule
+        if (self._env.road_env.isTerminal() == False):
             self._env.schedule.remove(self)
 
     def _walk(self, a, dest):
@@ -628,6 +656,7 @@ class CrossingModel(Model):
         ped_default_destination = (ped_origin[0], road_length)
 
         self.ped = Ped(uid, self, l = ped_origin, d = ped_destination, dd = ped_default_destination, b = bearing, s = ped_speed, g = gamma, alpha = alpha)
+        self.road_env.set_state_from_ped_location(ped_origin)
         self.schedule.add(self.ped)
 
         self.datacollector = DataCollector(agent_reporters={"CrossingType": "chosenCAType"})
@@ -639,7 +668,7 @@ class CrossingModel(Model):
         crossing_end = int(road_length*0.75 + 2)
         crossing_coords = [(x,y) for x,y in itertools.product(range(crossing_start, crossing_end), [0,road_width])]
 
-        road = Road(road_length, road_width, n_lanes, xcoords = crossing_coords, vf = vehicle_flow, blds = None)
+        self.road = Road(road_length, road_width, n_lanes, xcoords = crossing_coords, vf = vehicle_flow, blds = None)
 
         # Initilise tiling group used to discetise space
         ngroups = 2
@@ -652,7 +681,7 @@ class CrossingModel(Model):
         opp_dest = (ped_destination[0], -1*ped_destination[1])
 
         # Initialise an internal model of the street environment for the ped to use for planning
-        self.road_env = RoadEnv(self, uid, tg, road = road, destcoord = ped_destination, oppdestcoord = opp_dest)
+        self.road_env = RoadEnv(uid, self, tg, road = self.road, destcoord = ped_destination, oppdestcoord = opp_dest)
 
     def step(self):
         self.datacollector.collect(self)
@@ -664,3 +693,5 @@ class CrossingModel(Model):
     def getPed(self):
         return self.ped
 
+    def getRoad(self):
+        return self.road
