@@ -115,16 +115,16 @@ class CrossingAlternative(Agent):
     def getCrossingType(self):
         return self._ctype
 
-
 class RoadEnv(Agent):
 
     _mdp = None
 
     _crossing_features = None
     _dest_feature = None
+    _opp_dest_feature = None
     _road = None
 
-    def __init__(self, unique_id, model, tg, cfs = None, destf = None, r = None):
+    def __init__(self, unique_id, model, tg, cfs = None, destf = None, oppdestf = None, r = None):
         '''
         tg {TilingGroup} The tiling used to discretise the environment
         cfs {list} A list of arrays corresponding to all locations that correspond to crossing infrastructure
@@ -138,86 +138,10 @@ class RoadEnv(Agent):
 
         self._crossing_features = cfs
         self._dest_feature = destf
+        self._opp_dest_feature = oppdestf
         self._road = r
 
         self._sss = (self._tg.N, 2)
-
-        self.build_mdp()
-
-    def build_mdp(self):
-        '''Given the tilings used to represent the space and the destination create an mdp representing the result of 'walk forward' and 'cross'
-        actions in each tile. Tiles on the same side of the road as the destination only have walk forward actions available.
-        '''
-        # Get a lookup from node id to state
-        tg_edgesx = np.array([t.edges[0] for t in self._tg.tilings]).flatten()
-        tg_edgesx = np.concatenate((tg_edgesx, self._tg.limits[0][:1])) # Only add in the lower limit
-        tg_edgesx.sort()
-
-        tg_edgesy = self._tg.limits[1]
-
-
-        self.dict_node_state = {}
-        self._mdp = nx.DiGraph()
-
-        # Connect features on one side of the road to each other
-        edge_direction = '+'
-        for iy in range(len(tg_edgesy)):
-            for ix in range(len(tg_edgesx)-1):
-                ey = tg_edgesy[iy]
-
-                exi = tg_edgesx[ix]
-                exj = tg_edgesx[ix+1]
-
-                node_i = str(iy)+str(ix)
-                node_j = str(iy) + str(ix+1)
-
-                # Add lookup to dict
-                fi = self._tg.feature((exi, ey))
-                fj = self._tg.feature((exj, ey))
-
-                # Duplicates adding states to dict but think this might be faster than checking
-                self.dict_node_state[node_i] = fi
-                self.dict_node_state[node_j] = fj
-
-                # Add directed edge to graph if not at last edge
-                if (ix == len(tg_edgesx)-2) & (iy == 0):
-                    self._mdp.add_edge(node_j, node_j, action = 0)
-
-                # Depending on whist side of the road, connect in all same direction or all towards the destination feature
-                if edge_direction == '+':
-                    self._mdp.add_edge(node_i, node_j, action = 0)
-                else:
-                    self._mdp.add_edge(node_j, node_i, action = 0)
-
-
-                # Switch the edge direction if the starting node is the destination
-                if np.equal(fj,self._dest_feature).all():
-                    edge_direction = '-'
-
-                    # Connect destination to itself
-                    self._mdp.add_edge(node_j, node_j, action = 0)
-
-
-        # Connect features across the road with cross actions
-        for ix, ex in enumerate(tg_edgesx):
-            node_i = str(0)+str(ix)
-            node_j = str(1)+str(ix)
-
-            # Action value of 1 corresponds to crossing. Only allow crossing in one direction
-            self._mdp.add_edge(node_i, node_j, action = 1)
-
-    def state_node(self, s):
-        state_node = None
-        # Loop through key value pais to find node corresponding to state
-        for k,v in self.dict_node_state.items():
-            if np.equal(v,s).all():
-                state_node = k
-                break
-        return state_node
-
-    def state_actions(self):
-        for (i,j,a) in self._mdp.edges(nbunch=self._sn, data='action'):
-            yield a
 
     def possible_actions(self):
         for a in (0,1):
@@ -272,7 +196,6 @@ class RoadEnv(Agent):
 
     def set_state(self, s):
         self._s = s
-        self._sn = self.state_node(s)
 
     def isTerminal(self):
         return np.equal(self._s, self._dest_feature).all()
@@ -331,6 +254,127 @@ class ModelRoadEnv():
 
         self.model[tuple(state)][action] = [list(next_state), reward, self.time]
 
+class MDPModelRoadEnv:
+
+    _s = None
+    _sn = None
+    _mdp = None
+    dict_node_state = None
+
+    def __init__(road_env):
+        '''
+        road_env {} The road environment this MDP model environment is a model of.
+        '''
+        self.build_mdp(road_env)
+
+    def build_mdp(self):
+        '''Given the tilings used to represent the space and the destination create an mdp representing the result of 'walk forward' and 'cross'
+        actions in each tile. Tiles on the same side of the road as the destination only have walk forward actions available.
+        '''
+        # Get a lookup from node id to state
+        tg_edgesx = np.array([t.edges[0] for t in road_env._tg.tilings]).flatten()
+        tg_edgesx = np.concatenate((tg_edgesx, road_env._tg.limits[0][:1])) # Only add in the lower limit
+        tg_edgesx.sort()
+
+        tg_edgesy = road_env._tg.limits[1]
+
+
+        self.dict_node_state = {}
+        self._mdp = nx.DiGraph()
+
+        # Connect features on one side of the road to each other
+        edge_direction = '+'
+        for iy in range(len(tg_edgesy)):
+            for ix in range(len(tg_edgesx)-1):
+                ey = tg_edgesy[iy]
+
+                exi = tg_edgesx[ix]
+                exj = tg_edgesx[ix+1]
+
+                node_i = str(iy)+str(ix)
+                node_j = str(iy) + str(ix+1)
+
+                # Add lookup to dict
+                fi = road_env._tg.feature((exi, ey))
+                fj = road_env._tg.feature((exj, ey))
+
+                # Duplicates adding states to dict but think this might be faster than checking
+                self.dict_node_state[node_i] = fi
+                self.dict_node_state[node_j] = fj
+
+                # Add directed edge to graph if not at last edge
+                if (ix == len(tg_edgesx)-2) & (iy == 0):
+                    self._mdp.add_edge(node_j, node_j, action = 0)
+
+                # Depending on whist side of the road, connect in all same direction or all towards the destination feature
+                if edge_direction == '+':
+                    self._mdp.add_edge(node_i, node_j, action = 0)
+                else:
+                    self._mdp.add_edge(node_j, node_i, action = 0)
+
+
+                # Switch the edge direction if the starting node is the destination
+                if np.equal(fj,road_env._dest_feature).all():
+                    edge_direction = '-'
+
+                    # Connect destination to itself
+                    self._mdp.add_edge(node_j, node_j, action = 0)
+
+
+        # Connect features across the road with cross actions
+        for ix, ex in enumerate(tg_edgesx):
+            node_i = str(0)+str(ix)
+            node_j = str(1)+str(ix)
+
+            # Action value of 1 corresponds to crossing. Only allow crossing in one direction
+            self._mdp.add_edge(node_i, node_j, action = 1)
+
+
+    def step(self, a):
+        '''Progress to new state following action a
+        '''
+        # Initialise the reward
+        r = 0
+
+        # Find node that results from taking this action
+        for e in self._mdp.edges(nbunch=self._sn, data='action'):
+            if e[2] == a:
+                r = self.reward(self._s, a)
+                self._sn = e[1]
+                self._s = self.dict_node_state[self._sn] 
+                break
+
+        return (self._s, r)
+
+    def reward(self, s, a):
+        '''Get the reward of arriving in state s
+        '''
+        # Need to use modelled reward, eg from experience
+
+    def state_node(self, s):
+        state_node = None
+        # Loop through key value pais to find node corresponding to state
+        for k,v in self.dict_node_state.items():
+            if np.equal(v,s).all():
+                state_node = k
+                break
+        return state_node
+    
+    def state_actions(self, s):
+        sn = self.state_node(s)
+        for (i,j,a) in self._mdp.edges(nbunch=sn, data='action'):
+            yield a
+
+    def state_actions(self):
+        return state_actions(self._s)
+
+    def set_state(self, s):
+        self._s = s
+        self._sn = self.state_node(s)
+
+    @property
+    def state(self):
+        return self._s
 
 
 class Ped(MobileAgent):
