@@ -384,6 +384,23 @@ class MDPModelRoadEnv:
     def state(self):
         return self._s
 
+class Vehicle(MobileAgent):
+
+    def __init__(self, unique_id, model, l, s, b):
+        super().__init__(unique_id, model, l, s, b)
+
+    def step(self):
+
+        # Check if ped has reached end of the road or if it has chosen a crossing
+        if (self.get_loc() < self._road_length):
+
+            self._loc_history.append(self._loc)
+            # move the agent along
+            self.move()
+        else:
+            # When agent is done remove from schedule
+            self.model.schedule.remove(self)
+
 
 class Ped(MobileAgent):
 
@@ -565,24 +582,6 @@ class Ped(MobileAgent):
     def log_values(self):
         self._w_log = np.append(self._w_log, self._w)
         self._N_log = np.append(self._N_log, self._N)
-
-class Vehicle(MobileAgent):
-
-    def __init__(self, unique_id, model, l, s, b):
-        super().__init__(unique_id, model, l, s, b)
-
-    def step(self):
-
-        # Check if ped has reached end of the road or if it has chosen a crossing
-        if (self.get_loc() < self._road_length):
-
-            self._loc_history.append(self._loc)
-            # move the agent along
-            self.move()
-        else:
-            # When agent is done remove from schedule
-            self.model.schedule.remove(self)
-
 
 
 class CrossingModel(Model):
