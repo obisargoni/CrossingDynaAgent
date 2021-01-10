@@ -139,3 +139,20 @@ class TilingGroup(object):
             f= f[n:]
         assert sum([f.size for f in fs]) == init_shape
         return fs
+
+    def all_features(self):
+        '''Generator that iterates over all possible features represented by the tilings
+        '''
+        # Get the x an y limits of all tiles
+        tg_edgesx = np.array([t.edges[0] for t in self.tilings]).flatten()
+        tg_edgesx = np.concatenate((tg_edgesx, self.limits[0][:1])) # Only add in the lower limit
+        tg_edgesx.sort()
+
+        tg_edgesy = self.limits[1]
+
+        for iy in range(len(tg_edgesy)):
+            for ix in range(len(tg_edgesx)-1):
+                ey = tg_edgesy[iy]
+
+                for ex in [tg_edgesx[ix], tg_edgesx[ix+1]]:
+                    yield self.feature((ex, ey))
