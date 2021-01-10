@@ -472,7 +472,15 @@ class Ped(MobileAgent):
             a = np.random.choice(possible_actions, p = p)
         return a
 
-    def greedy_action(self, env):
+    def epsilon_greedy_action(self, possible_actions, epsilon):
+
+        if np.random.rand() > epsilon:
+            return self.greedy_action(possible_actions)
+        else:
+            return np.random.choice(possible_actions)
+
+
+    def greedy_action(self, possible_actions):
         '''Find the action that have the highest associated value. Take that action
         '''
         q_max = -sys.maxsize
