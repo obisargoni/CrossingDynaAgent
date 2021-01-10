@@ -17,6 +17,7 @@ from tilings import TilingGroup
 
 class MobileAgent(Agent):
 
+    _env = None
     _loc = None
     _speed = None
     _bearing = None
@@ -25,6 +26,7 @@ class MobileAgent(Agent):
 
     def __init__(self, unique_id, model, l, s, b):
         super().__init__(unique_id, model)
+        self._env = model
         self._loc = l
         self._speed = s
         self._bearing = b
@@ -120,8 +122,9 @@ class RoadEnv(Agent):
     _dest_feature = None
     _opp_dest_feature = None
     _road = None
+    _s = None
 
-    def __init__(self, unique_id, model, tg, cfs = None, destf = None, oppdestf = None, r = None):
+    def __init__(self, unique_id, model, tg, road = None, destcoord = None, oppdestcoord = None):
         '''
         tg {TilingGroup} The tiling used to discretise the environment
         cfs {list} A list of arrays corresponding to all locations that correspond to crossing infrastructure
@@ -132,11 +135,11 @@ class RoadEnv(Agent):
 
         # The tiling group used by the agent to discretise space
         self._tg = tg
+        self._road = road
 
-        self._crossing_features = cfs
-        self._dest_feature = destf
-        self._opp_dest_feature = oppdestf
-        self._road = r
+        self._crossing_features = [self._tg.feature(xcoord) for xcoord in self._road.getCrossingCoords()]
+        self._dest_feature = self._tg.feature(destcoord)
+        self._opp_dest_feature = self._tg.feature(oppdestcoord)
 
         self._sss = (self._tg.N, 2)
 
@@ -267,15 +270,17 @@ class MDPModelRoadEnv:
     _s = None
     _sn = None
     _mdp = None
+    _terminal_state = None
     dict_node_state = None
 
-    def __init__(road_env):
+    def __init__(self, road_env):
         '''
         road_env {} The road environment this MDP model environment is a model of.
         '''
+        self._terminal_state = road_env._dest_feature
         self.build_mdp(road_env)
 
-    def build_mdp(self):
+    def build_mdp(self, road_env):
         '''Given the tilings used to represent the space and the destination create an mdp representing the result of 'walk forward' and 'cross'
         actions in each tile. Tiles on the same side of the road as the destination only have walk forward actions available.
         '''
@@ -380,6 +385,9 @@ class MDPModelRoadEnv:
         self._s = s
         self._sn = self.state_node(s)
 
+    def isTerminal(self):
+        return np.equal(self._s, self._terminal_state).all()
+
     @property
     def state(self):
         return self._s
@@ -404,11 +412,13 @@ class Vehicle(MobileAgent):
 
 class Ped(MobileAgent):
 
-    def __init__(self, unique_id, env, l, b, s, g, alpha):
+    def __init__(self, unique_id, env, l, d, dd, b, s, g, alpha):
         '''
         unique_id {int} Unique ID used to index agent
         env {mesa.Model} The model environment agent is placed in
         l {tuple} The starting location of the agent
+        d {tuple} The destination coordinate of the agent
+        dd {tuple} The default destination coordiante of the agent
         b {tuple} The starting bearing of the agent
         s {double} The speed of the agent
         actions {tuple} The actions available to the agent
@@ -416,6 +426,8 @@ class Ped(MobileAgent):
         a {double} Step size of update to feature vector weights
         '''
         super().__init__(unique_id, env, l, s, b)
+        self.d = d
+        self.dd = dd
         self._g = g
         self._alpha = alpha
 
@@ -433,7 +445,7 @@ class Ped(MobileAgent):
 
         # An alternative model of the environment using an mdp
         #self.model_env = MDPModelRoadEnv(env.road_env)
-        #self.planning_policy = self.mdp_model_planning_policy(mdp_model, env.road_env.state, env.road_env._opp_dest_feature)
+        #self.planning_policy = self.mdp_model_planning_policy(self.model_env, env.road_env.state, env.road_env._opp_dest_feature)
 
     def mdp_model_planning_policy(self, mdp_model, start_state, opp_destf):
         '''The agent plans using a planning policy and its model of the environment. The policy consists of the probability of taking actions
@@ -448,11 +460,11 @@ class Ped(MobileAgent):
         '''
         k=0
         while np.equal(mdp_model.state, opp_destf).all() == False:
-            self.env.road_env.step(0)
+            mdp_model.step(0)
             k+=1
 
             # Hack to avoid infinite loop when ped has walked past opp_dest_feature
-            if k > self.env.road_env._tg.N:
+            if k > len(mdp_model._mdp.nodes()):
                 k = 0
                 break
 
@@ -460,7 +472,7 @@ class Ped(MobileAgent):
         p_fwd = 1-p_cross
 
         # Reset the internal model state to the state the ped is currently in
-        self.env.road_env.set_state(start_state)
+        mdp_model.set_state(start_state)
 
         return (p_fwd, p_cross)
 
@@ -497,10 +509,10 @@ class Ped(MobileAgent):
     def step(self, nplanningsteps = 0):
 
         # Check if ped has reached its destination
-        if (self.env.road_env.isTerminal() == False):
+        if (self._env.road_env.isTerminal() == False):
 
             # Do planning using internal model of env
-            s = self.env.road_env.state
+            s = self._env.road_env.state
             t = 0
             rtn = 0
             for i in range(nplanningsteps):
@@ -524,9 +536,9 @@ class Ped(MobileAgent):
                 self.N[:,a] += s
 
             # Now take greedy action
-            possible_actions = list(self.env.road_env.possible_actions())
+            possible_actions = list(self._env.road_env.possible_actions())
             a = self.greedy_action(possible_actions)
-            next_state, r = self.env.road_env.step(a)
+            next_state, r = self._env.road_env.step(a)
 
             # Update value function with real reward from env
             td_error = r - self.q(s, a = a)
@@ -538,17 +550,15 @@ class Ped(MobileAgent):
 
         else:
             # When agent is done remove from schedule
-            self.env.schedule.remove(self)
+            self._env.schedule.remove(self)
 
-    def walk(self, a):
-        '''
-        Given an action, determine the direction of movement and move in that direction
-        '''
-        vector_to_dest = [self._dest[i] - self._loc[i] for i in range(len(self._loc))]
+    def _walk(self, a, dest):
+        
+        vector_to_dest = [dest[i] - self._loc[i] for i in range(len(self._loc))]
 
         # a == 0 means walk toward destination, bearing either pi/2 or -pi/2. a == 1 means cross road, bearing = 0
         if a == 0:
-            if (np.sign(vector_to_dest[0]) == -1) & (self._loc[1] > 5):
+            if (np.sign(vector_to_dest[0]) == -1):
                 self._bearing = -np.pi/2
             else:
                 self._bearing = np.pi/2
@@ -559,11 +569,18 @@ class Ped(MobileAgent):
         self.move()
 
 
-    def getDestination(self):
-        return self._dest
+    def walk(self, a):
+        '''
+        Given an action, determine the direction of movement and move in that direction
+        '''
 
-    def set_dest(self, d):
-        self._dest = d
+        # Sedt whether to walk towards default destination or final destination
+        if self._loc[1] > self._env.road_env._road.getWidth():
+            dest = self.d
+        else:
+            dest = self.dd
+
+        self._walk(a, dest)
 
     def reset_values(self, sss):
         # Initialise weights with arbitary low value so that agent doesn't take action it has not considered with internal model
@@ -602,13 +619,15 @@ class CrossingModel(Model):
 
         # Create the road
         uid = 0
-        init_road_env(self, uid, road_length, road_width, vehicle_flow, n_lanes, ped_destination)
+        self.init_road_env(uid, road_length, road_width, vehicle_flow, n_lanes, ped_destination)
 
         # Create the ped
         uid += 1
         bearing = 0
 
-        self.ped = Ped(uid, self, l = ped_origin, b = bearing, s = ped_speed, d = ped_destination, g = gamma, a = alpha)
+        ped_default_destination = (ped_origin[0], road_length)
+
+        self.ped = Ped(uid, self, l = ped_origin, d = ped_destination, dd = ped_default_destination, b = bearing, s = ped_speed, g = gamma, alpha = alpha)
         self.schedule.add(self.ped)
 
         self.datacollector = DataCollector(agent_reporters={"CrossingType": "chosenCAType"})
@@ -629,15 +648,11 @@ class CrossingModel(Model):
 
         tg = TilingGroup(ngroups, tiling_limits, ntiles)
 
-        dest_feature = tg.feature(ped_destination)
-        crossings_features = [tg.feature(c) for c in crossing_coords]
-
         # Note location opposite destination on agent's side of the road
         opp_dest = (ped_destination[0], -1*ped_destination[1])
-        opp_dest_feature = tg.feature(opp_dest)
 
         # Initialise an internal model of the street environment for the ped to use for planning
-        self.road_env = RoadEnv(self, uid, tg, cfs = crossings_features, destf = dest_feature, oppdestf = opp_dest_feature, vs = road.getVehicleFlow())
+        self.road_env = RoadEnv(self, uid, tg, road = road, destcoord = ped_destination, oppdestcoord = opp_dest)
 
     def step(self):
         self.datacollector.collect(self)

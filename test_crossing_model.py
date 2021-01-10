@@ -14,7 +14,7 @@ from tilings import Tiling, TilingGroup
 
 import CrossingModel
 CrossingModel = reload(CrossingModel)
-from CrossingModel import PedInternalModel, CrossingModel
+from CrossingModel import MDPModelRoadEnv, CrossingModel
 
 
 ###########################
@@ -61,9 +61,8 @@ cm = CrossingModel(road_length, road_width, vehicle_flow, n_lanes, o, d, g, a, s
 # Get ped and road
 
 ped = cm.getPed()
-road = cm.getRoad()
 
-loc_feature = ped._tg.feature(ped._loc)
+loc_feature = cm.road_env._tg.feature(ped._loc)
 
 
 # Writing up tests of the MDP
@@ -71,70 +70,71 @@ loc_feature = ped._tg.feature(ped._loc)
 
 # Test crossig opposite destination results in terminal state
 
-ped.set_search_policy(loc_feature, ped._opp_dest_feature)
+ped.model_env = MDPModelRoadEnv(cm.road_env)
+ped.planning_policy = ped.mdp_model_planning_policy(ped.model_env, cm.road_env.state, cm.road_env._opp_dest_feature)
 
 # get number of foward steps before opposite dest
-k = int((1/ped.search_policy[1]) - 1)
+k = int((1/ped.planning_policy[1]) - 1)
 
 actions = [0] * k
 for a in actions:
-	ped.internal_model.step(a)
-np.equal(ped.internal_model._s, ped._opp_dest_feature).all()
+	ped.model_env.step(a)
+np.equal(ped.model_env._s, cm.road_env._opp_dest_feature).all()
 
-ped.internal_model.step(1)
-assert ped.internal_model.isTerminal()
+ped.model_env.step(1)
+assert ped.model_env.isTerminal()
 
 
 # Test going past opposite destination by 2 steps and crossing requires 2 steps to get to dest
-ped.internal_model.set_state(loc_feature)
+ped.model_env.set_state(loc_feature)
 actions = [0] * (k+2)
 for a in actions:
-	ped.internal_model.step(a)
+	ped.model_env.step(a)
 
-ped.internal_model.step(1)
-assert ped.internal_model.isTerminal() == False
-ped.internal_model.step(0)
-assert ped.internal_model.isTerminal() == False
-ped.internal_model.step(0)
-assert ped.internal_model.isTerminal() == True
+ped.model_env.step(1)
+assert ped.model_env.isTerminal() == False
+ped.model_env.step(0)
+assert ped.model_env.isTerminal() == False
+ped.model_env.step(0)
+assert ped.model_env.isTerminal() == True
 
 
 # Test crossing straight away and walking ahead requires k steps after crossing
-ped.internal_model.set_state(loc_feature)
+ped.model_env.set_state(loc_feature)
 
-ped.internal_model.step(1)
+ped.model_env.step(1)
 
 n= 0
-while ped.internal_model.isTerminal() == False:
-	ped.internal_model.step(0)
+while ped.model_env.isTerminal() == False:
+	ped.model_env.step(0)
 	n+=1
 assert n == k
 
 
 # Test reaching end of starting side of road is stuck on same state if continues to take forward action
-ped.internal_model.set_state(loc_feature)
-end_road_feature = ped._tg.feature((100,0))
-end_state_node = ped.internal_model.state_node(end_road_feature)
+ped.model_env.set_state(loc_feature)
+end_road_feature = cm.road_env._tg.feature((100,0))
+end_state_node = ped.model_env.state_node(end_road_feature)
 nsteps = int(end_state_node)
 actions = [0] * (nsteps)
 for a in actions:
-	ped.internal_model.step(a)
+	ped.model_env.step(a)
 
 # Should now be at end of road
-s = ped.internal_model.state
+s = ped.model_env.state
 
 # Take some more steps forward
 for i in range(3):
-	ped.internal_model.step(0)
+	ped.model_env.step(0)
 
-assert np.equal(s, ped.internal_model.state).all()
+assert np.equal(s, ped.model_env.state).all()
 
 # Now cross and see how many steps required to get to dest
-ped.internal_model.step(1)
+ped.model_env.step(1)
 
 n = 0
-while ped.internal_model.isTerminal() == False:
-	ped.internal_model.step(0)
+while ped.model_env.isTerminal() == False:
+	ped.model_env.step(0)
 	n+=1
 assert n == (nsteps - k)
 
@@ -149,27 +149,27 @@ assert n == (nsteps - k)
 
 l = (0,0)
 ped.set_loc(l)
-ped.set_dest((0,1))
+dest = (0,1)
 a = 0
-ped.walk(a)
+ped._walk(a, dest)
 assert ped._loc[0] > l[0]
 
 l = (3,0)
 ped.set_loc(l)
-ped.set_dest((5,1))
-ped.walk(a)
+dest = (5,1)
+ped._walk(a, dest)
 assert ped._loc[0] > l[0]
 
 l = (3,0)
 ped.set_loc(l)
-ped.set_dest((1,1))
-ped.walk(a)
+dest = (1,1)
+ped._walk(a, dest)
 assert ped._loc[0] < l[0]
 
 l = (3,0)
 ped.set_loc(l)
-ped.set_dest((1,1))
+dest = (1,1)
 a = 1
-ped.walk(a)
+ped._walk(a, dest)
 assert ped._loc[0] == l[0]
 assert ped._loc[1] > l[1]
