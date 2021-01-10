@@ -428,13 +428,15 @@ class Ped(MobileAgent):
 
         # initialise model of env used for planning
         self.model_env = ModelRoadEnv(rand = np.random)
+        #self.planning_policy = # Can refactor using decorators to return a planning policy function, but don't want to figure it out now
 
-        self.set_internal_model_state_and_search_policy()
 
-        self.set_search_policy(self._opp_dest_feature)
+        # An alternative model of the environment using an mdp
+        #self.model_env = MDPModelRoadEnv(env.road_env)
+        #self.planning_policy = self.mdp_model_planning_policy(mdp_model, env.road_env.state, env.road_env._opp_dest_feature)
 
-    def set_search_policy(self, opp_destf):
-        '''The agent explores its internal model using a search policy. The policy consists of the probability of taking actions
+    def mdp_model_planning_policy(self, mdp_model, start_state, opp_destf):
+        '''The agent plans using a planning policy and its model of the environment. The policy consists of the probability of taking actions
         move forward or cross road at each state. The policy probability is set such that the agent explores crossing close to its
         destination more frequently.
 
@@ -444,9 +446,8 @@ class Ped(MobileAgent):
         Args:
             opp_destf {array} Feature corresponding to the location opposite the agent's destination, where crossing takes the agent directly to its destination
         '''
-        start_state = self.env.road_env.state
         k=0
-        while np.equal(self.env.road_env.state, opp_destf).all() == False:
+        while np.equal(mdp_model.state, opp_destf).all() == False:
             self.env.road_env.step(0)
             k+=1
 
@@ -461,9 +462,9 @@ class Ped(MobileAgent):
         # Reset the internal model state to the state the ped is currently in
         self.env.road_env.set_state(start_state)
 
-        self.search_policy = (p_fwd, p_cross)
+        return (p_fwd, p_cross)
 
-    def choose_search_action(self, possible_actions, action_probabilities):
+    def planning_policy_action(self, possible_actions, action_probabilities):
         a = None
         if len(possible_actions) == 1:
             a = possible_actions[0]
@@ -485,7 +486,7 @@ class Ped(MobileAgent):
         '''
         q_max = -sys.maxsize
         a_chosen = None
-        for a in env.possible_actions():
+        for a in possible_actions:
             q = self.q(a)
             if q > q_max:
                 a_chosen = a
@@ -505,8 +506,8 @@ class Ped(MobileAgent):
             for i in range(nplanningsteps):
 
                 # Choose action
-                possible_actions = list(self.model_env.possible_actions())
-                a = self.choose_search_action(possible_actions, policy)
+                possible_actions = self.model_env.state_actions(s)
+                a = self.epsilon_greedy_action(possible_actions, policy)
 
                 sa_visited.append((s, a))
 
@@ -514,6 +515,7 @@ class Ped(MobileAgent):
                 new_s, reward = self.model_env.step(s, a)
                 rtn += reward*(self._g**t) # Discount reward and add to total return
                 t+=1
+                s = new_s
 
             # Update value function with planning steps
             for s, a in sa_visited:
@@ -522,7 +524,8 @@ class Ped(MobileAgent):
                 self.N[:,a] += s
 
             # Now take greedy action
-            a = self.greedy_action()
+            possible_actions = list(self.env.road_env.possible_actions())
+            a = self.greedy_action(possible_actions)
             next_state, r = self.env.road_env.step(a)
 
             # Update value function with real reward from env
@@ -532,7 +535,6 @@ class Ped(MobileAgent):
 
             # Update internal model
             self.model_env.update(s, a, next_state, r)
-
 
         else:
             # When agent is done remove from schedule
