@@ -585,7 +585,7 @@ class Ped(MobileAgent):
         if (self._env.road_env.isTerminal() == False):
             self._env.schedule.remove(self)
 
-    def _walk(self, a, dest):
+    def walkdest(self, a, dest):
         
         vector_to_dest = [dest[i] - self._loc[i] for i in range(len(self._loc))]
 
@@ -603,17 +603,14 @@ class Ped(MobileAgent):
 
 
     def walk(self, a):
-        '''
-        Given an action, determine the direction of movement and move in that direction
-        '''
 
-        # Sedt whether to walk towards default destination or final destination
+        # Set whether to walk towards default destination or final destination
         if self._loc[1] > self._env.road_env._road.getWidth():
             dest = self.d
         else:
             dest = self.dd
 
-        self._walk(a, dest)
+        self.walkdest(a, dest)
 
     def reset_values(self, sss):
         # Initialise weights with arbitary low value so that agent doesn't take action it has not considered with internal model
