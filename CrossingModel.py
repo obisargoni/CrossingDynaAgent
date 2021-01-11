@@ -514,11 +514,8 @@ class Ped(MobileAgent):
                 q_max = q
         return a_chosen
 
-
-    def dyna_step(self, nplanningsteps = 0):
-
-        # Do planning using internal model of env
-        s = self._env.road_env.state
+    def planning(self, start_state, nplanningsteps):
+        s = start_state
         t = 0
         rtn = 0
         sa_visited = []
@@ -545,6 +542,14 @@ class Ped(MobileAgent):
             td_error = rtn - self.q(s, a = a)
             self.w[:, a] += self._alpha * td_error * s
             self.N[:,a] += s
+
+
+    def dyna_step(self, nplanningsteps = 0):
+
+        s = self._env.road_env.state
+
+        # Do planning using internal model of env
+        self.planning(s, nplanningsteps)
 
         # Now take greedy action
         possible_actions = list(self._env.road_env.possible_actions())
