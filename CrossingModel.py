@@ -653,7 +653,7 @@ class CrossingModel(Model):
         uid += 1
         bearing = 0
 
-        ped_default_destination = (ped_origin[0], road_length)
+        ped_default_destination = (road_length, ped_origin[1])
 
         self.ped = Ped(uid, self, l = ped_origin, d = ped_destination, dd = ped_default_destination, b = bearing, s = ped_speed, g = gamma, alpha = alpha)
         self.road_env.set_state_from_ped_location(ped_origin)
