@@ -439,6 +439,8 @@ class Ped(MobileAgent):
         self._alpha = alpha
         self._epsilon = 0.1
         self._nepochs = 0
+        self._ntrainingsteps = 0
+        self._max_steps_in_epoch = 500
 
         # initialise weights and n visits log
         self._w_log = np.array([])
@@ -568,12 +570,14 @@ class Ped(MobileAgent):
         '''Train the agent over multiple epochs
         '''
         self.dyna_step(nplanningsteps)
+        self._ntrainingsteps += 1
 
         # if destination is reached reset environment and increase epoch count
-        if (self._env.road_env.isTerminal() == False):
+        if (self._env.road_env.isTerminal() == True) | (self._ntrainingsteps > self._max_steps_in_epoch):
             self._loc = self._origin
             self._env.road_env.set_state_from_ped_location(self._loc)
             self._nepochs += 1
+            self._ntrainingsteps = 0
 
     def step(self, nplanningsteps):
         '''Method to use when agent has been trained
