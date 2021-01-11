@@ -437,7 +437,7 @@ class Ped(MobileAgent):
         self.dd = dd
         self._g = g
         self._alpha = alpha
-        self._epsilon = 0.5
+        self._epsilon = 0.1
         self._nepochs = 0
 
         # initialise weights and n visits log
@@ -496,7 +496,7 @@ class Ped(MobileAgent):
 
     def epsilon_greedy_action(self, state, possible_actions, epsilon):
 
-        if np.random.rand() > epsilon:
+        if np.random.rand() < epsilon:
             return self.greedy_action(state, possible_actions)
         else:
             return np.random.choice(possible_actions)
