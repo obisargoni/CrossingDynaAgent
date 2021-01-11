@@ -672,7 +672,7 @@ class CrossingModel(Model):
         '''
         crossing_start = int(road_length*0.75 - 2)
         crossing_end = int(road_length*0.75 + 2)
-        crossing_coords = [(x,y) for x,y in itertools.product(range(crossing_start, crossing_end), [0,road_width])]
+        crossing_coords = [(x,y) for x,y in itertools.product(range(crossing_start, crossing_end), range(0, road_width))]
 
         self.road = Road(road_length, road_width, n_lanes, xcoords = crossing_coords, vf = vehicle_flow, blds = None)
 
