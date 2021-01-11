@@ -679,7 +679,7 @@ class CrossingModel(Model):
         # Initilise tiling group used to discetise space
         ngroups = 2
         tiling_limits = [(0,road_length), (0, road_width)]
-        ntiles = [25, 2]
+        ntiles = [road_length, road_width]
 
         tg = TilingGroup(ngroups, tiling_limits, ntiles)
 
