@@ -148,11 +148,13 @@ class TilingGroup(object):
         tg_edgesx = np.concatenate((tg_edgesx, self.limits[0][:1])) # Only add in the lower limit
         tg_edgesx.sort()
 
-        tg_edgesy = self.limits[1]
+        tg_edgesy = np.array([t.edges[1] for t in self.tilings]).flatten()
+        tg_edgesy = np.concatenate((tg_edgesy, self.limits[1][:1])) # Only add in the lower limit
+        tg_edgesy.sort()
+
 
         for iy in range(len(tg_edgesy)):
-            for ix in range(len(tg_edgesx)-1):
+            for ix in range(len(tg_edgesx)):
                 ey = tg_edgesy[iy]
-
-                for ex in [tg_edgesx[ix], tg_edgesx[ix+1]]:
-                    yield self.feature((ex, ey))
+                ex = tg_edgesx[ix]
+                yield self.feature((ex, ey))
