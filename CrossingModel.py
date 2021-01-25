@@ -234,6 +234,8 @@ class ModelRoadEnv:
         choice_index = np.random.choice(len(options))
         next_state, reward, time = options[choice_index]
 
+        next_state = np.array(next_state)
+
         return (next_state, reward)
 
     def update(self, state, action, next_state, reward):
@@ -531,19 +533,24 @@ class Ped(MobileAgent):
 
             a = self.epsilon_greedy_action(s, possible_actions, self._epsilon)
 
-            sa_visited.append((s, a))
 
             # Sample next state and reward
             new_s, reward = self.model_env.step(s, a)
+            sa_visited.append((s, a, reward))
             rtn += reward*(self._g**t) # Discount reward and add to total return
             t+=1
             s = new_s
 
+
         # Update value function with planning steps
-        for s, a in sa_visited:
+        for i, (s, a, r) in enumerate(sa_visited):
+            #print("{} : {}, {}".format(i,rtn,r))
             td_error = rtn - self.q(s, a = a)
             self.w[:, a] += self._alpha * td_error * s
             self.N[:,a] += s
+
+            # Get return for next state
+            rtn = (rtn - r) / self._g
 
 
     def dyna_step(self, nplanningsteps = 0):
