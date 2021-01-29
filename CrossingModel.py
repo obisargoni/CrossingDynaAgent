@@ -616,7 +616,7 @@ class Ped(MobileAgent):
     def walk(self, a):
 
         # Set whether to walk towards default destination or final destination
-        if self._loc[1] > self._env.road_env._road.getWidth():
+        if self._loc[1] > self._env.road_env._road.getWidth() / 2:
             dest = self.d
         else:
             dest = self.dd
