@@ -427,7 +427,7 @@ class Vehicle(MobileAgent):
 
 class Ped(MobileAgent):
 
-    def __init__(self, unique_id, env, l, d, dd, b, s, g, alpha):
+    def __init__(self, unique_id, env, l, d, dd, b, s, g, alpha, epsilon = 0.1):
         '''
         unique_id {int} Unique ID used to index agent
         env {mesa.Model} The model environment agent is placed in
@@ -446,7 +446,7 @@ class Ped(MobileAgent):
         self.dd = dd
         self._g = g
         self._alpha = alpha
-        self._epsilon = 0.1
+        self._epsilon = epsilon
         self._nepochs = 0
         self._ntrainingsteps = 0
         self._max_steps_in_epoch = 500
@@ -660,7 +660,7 @@ class Ped(MobileAgent):
 
 
 class CrossingModel(Model):
-    def __init__(self, road_length, road_width, vehicle_flow, n_lanes, ped_origin, ped_destination, gamma, alpha, ped_speed):
+    def __init__(self, road_length, road_width, vehicle_flow, n_lanes, ped_origin, ped_destination, gamma, alpha, ped_speed, ped_epsilon = 0.1):
         self.schedule = RandomActivation(self)
         self.running = True
         self.nsteps = 0
@@ -675,7 +675,7 @@ class CrossingModel(Model):
 
         ped_default_destination = (road_length, ped_origin[1])
 
-        self.ped = Ped(uid, self, l = ped_origin, d = ped_destination, dd = ped_default_destination, b = bearing, s = ped_speed, g = gamma, alpha = alpha)
+        self.ped = Ped(uid, self, l = ped_origin, d = ped_destination, dd = ped_default_destination, b = bearing, s = ped_speed, g = gamma, alpha = alpha, epsilon = ped_epsilon)
         self.road_env.set_state_from_ped_location(ped_origin)
         self.schedule.add(self.ped)
 
