@@ -139,6 +139,12 @@ class RoadEnv(Agent):
 
         self._crossing_features = [self._tg.feature(xcoord) for xcoord in self._road.getCrossingCoords()]
         self._dest_feature = self._tg.feature(destcoord)
+
+        # Use several features to represent dest so that it is easier to reach
+        dest_coords = [ (destcoord[0] + i, destcoord[1] + j) for i in (0,1,-1) for j in (0,1,-1)]
+        self._dest_features = [self._tg.feature(destc) for destc in dest_coords]
+
+
         self._opp_dest_feature = self._tg.feature(oppdestcoord)
 
         self._sss = (self._tg.N, 2)
@@ -204,7 +210,8 @@ class RoadEnv(Agent):
         self._s = s
 
     def isTerminal(self):
-        return np.equal(self._s, self._dest_feature).all()
+        is_terminal = np.array([np.equal(self._s, df).all() for df in self._dest_features]).any()
+        return is_terminal
 
     @property
     def state(self):
