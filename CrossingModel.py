@@ -119,6 +119,7 @@ class RoadEnv(Agent):
     _mdp = None
 
     _crossing_features = None
+    _carriageway_features = None
     _dest_feature = None
     _opp_dest_feature = None
     _road = None
@@ -138,6 +139,8 @@ class RoadEnv(Agent):
         self._road = road
 
         self._crossing_features = [self._tg.feature(xcoord) for xcoord in self._road.getCrossingCoords()]
+        pavement_width = 1
+        self._carriageway_features = [self._tg.feature((x,y)) for x in range(self._road.getLength()) for y in range(pavement_width, self._road.getWidth() - pavement_width)]
         self._dest_feature = self._tg.feature(destcoord)
 
         # Use several features to represent dest so that it is easier to reach
@@ -190,18 +193,21 @@ class RoadEnv(Agent):
         '''Get the reward of arriving in state s
         '''
 
-        if a == 0:
-            # -1 reward for each step taken forward regardless of state
-            return -1
-        elif a == 1:
-            # Find out if ped is crossing by some crossing infrastructure
-            cross_on_inf = np.array([np.equal(s, cf).all() for cf in self._crossing_features]).any()
+        # Find out if agent is on crossing infrastructure
+        on_inf = np.array([np.equal(s, cf).all() for cf in self._crossing_features]).any()
 
-            if cross_on_inf:
+        # Find out if agent is on road
+        on_carriage = np.array([np.equal(s, cf).all() for cf in self._carriageway_features]).any()
+
+        # currently not differentiating between actons
+        if on_carriage:
+            if on_inf:
                 return -1
             else:
-                # Return value to reflect exposure of vehicles
                 return -1*self._road.getVehicleFlow()
+        else:
+            return -1
+
 
     def set_state_from_ped_location(self, loc):
         self._s = self._tg.feature(loc)
